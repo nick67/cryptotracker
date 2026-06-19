@@ -1,0 +1,3952 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Παρακολούθηση Κρυπτονομισμάτων</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --text-dim: #9aa1ac;
+    --accent: #4f8cff;
+    --green: #3ddc97;
+    --red: #ff5c6c;
+    --amber: #ffb454;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    padding: 1.5rem;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.05rem; font-weight: 600; margin: 0 0 0.75rem; }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; margin: 0 0 1.25rem; }
+
+  .tabs { display: flex; gap: 0.4rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    background: transparent; border: none; border-radius: 0;
+    color: var(--text-dim); padding: 0.6rem 1rem; font-size: 0.9rem;
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .tab-btn:hover { color: var(--text); background: transparent; }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 1.25rem; }
+  select, button, input {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.5rem 0.75rem; font-size: 0.9rem;
+  }
+  button { cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+  button:hover { background: #2a2f3a; border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #6aa0ff; }
+  button.small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+  .toolbar select { min-width: 220px; }
+  .currency-toggle { display: flex; gap: 0.3rem; }
+  .currency-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .status { color: var(--text-dim); font-size: 0.8rem; margin-left: auto; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 1rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.2rem; position: relative; overflow: hidden; min-width: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; }
+  .coin-name { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 1rem; min-width: 0; overflow: hidden; }
+  .coin-name span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .coin-name { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 1rem; }
+  .coin-name img { width: 22px; height: 22px; border-radius: 50%; }
+  .ticker { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; }
+  .head-actions { display: flex; gap: 0.3rem; align-items: center; }
+  .icon-btn {
+    background: transparent; border: none; color: var(--text-dim);
+    font-size: 1.1rem; padding: 0 0.2rem; line-height: 1;
+  }
+  .icon-btn:hover { color: var(--accent); background: transparent; border-color: transparent; }
+  .icon-btn.remove:hover { color: var(--red); }
+
+  .price { font-size: 1.6rem; font-weight: 700; margin: 0.3rem 0 0.2rem; }
+  .change { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.6rem; }
+  .change.pos { color: var(--green); }
+  .change.neg { color: var(--red); }
+
+  .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.6rem; }
+  .rows b { color: var(--text); font-weight: 600; }
+  .badge-note {
+    font-size: 0.7rem; color: var(--amber); background: rgba(255,180,84,0.1);
+    border: 1px solid rgba(255,180,84,0.25); border-radius: 6px;
+    padding: 0.2rem 0.4rem; display: inline-block; margin-bottom: 0.6rem;
+  }
+  .chart-wrap { position: relative; height: 100px; overflow: hidden; }
+  .chart-wrap canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+  canvas { width: 100%; display: block; }
+
+  .empty { color: var(--text-dim); text-align: center; padding: 2rem; border: 1px dashed var(--border); border-radius: 12px; }
+  footer { margin-top: 1.5rem; color: var(--text-dim); font-size: 0.75rem; text-align: center; }
+
+  @media (max-width: 480px) {
+    .toolbar select { min-width: 0; flex: 1; }
+    .status { margin-left: 0; flex-basis: 100%; }
+  }
+
+  /* Portfolio */
+  .portfolio-summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.8rem; margin-bottom: 1.25rem;
+  }
+  .summary-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1.1rem; }
+  .summary-card .label { color: var(--text-dim); font-size: 0.78rem; margin-bottom: 0.2rem; }
+  .summary-card .value { font-size: 1.3rem; font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }
+  td.num, th.num { text-align: right; }
+  .holdings-table-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 0.4rem 1rem; overflow-x: auto; }
+  .qty-input { width: 110px; padding: 0.35rem 0.5rem; font-size: 0.85rem; }
+
+  /* Historical portfolio comparison */
+  #histResultBox {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 0.9rem 1.1rem; margin-bottom: 1.25rem;
+  }
+  #histResultBox .hist-row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: baseline; }
+  #histResultBox .hist-main { font-size: 1.3rem; font-weight: 700; }
+  #histResultBox .hist-sub { color: var(--text-dim); font-size: 0.82rem; }
+  #histResultBox .hist-note { color: var(--amber); font-size: 0.75rem; margin-top: 0.5rem; }
+  #histDateInput { color-scheme: dark; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: var(--bg);
+    z-index: 100; padding: 0;
+  }
+  .modal-overlay.open { display: flex; flex-direction: column; }
+  .modal-box {
+    background: var(--panel); border: none; border-radius: 0;
+    width: 100%; height: 100%; padding: 1rem 1.2rem; max-height: none;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; flex-shrink: 0; }
+  .modal-head h2 { margin: 0; }
+  .timeframe-toggle { display: flex; gap: 0.3rem; }
+  .timeframe-toggle button { border-color: #f59e0b; color: #f59e0b; }
+  .timeframe-toggle button.active { background: #f59e0b; border-color: #f59e0b; color: #0f1115; font-weight: 700; }
+  .modal-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-shrink: 0; }
+  .modal-tools .hint { color: var(--text-dim); font-size: 0.78rem; }
+  .modal-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .big-chart-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
+
+  /* White crosshair cursor for the dark chart background */
+  #bigChart {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/%3E%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/%3E%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
+  }
+  .reg-stats { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-dim); flex-shrink: 0; }
+  .reg-stats b { color: var(--text); }
+
+  /* AI Analysis panel */
+  #analysisPanel {
+    flex-shrink: 0; max-height: 240px; overflow-y: auto;
+    background: #12151c; border-top: 1px solid var(--border);
+    padding: 0.75rem 1.2rem; font-size: 0.84rem; display: none;
+  }
+  #analysisPanel.open { display: block; }
+  #analysisPanel.minimized { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; border-top: none; }
+  .analysis-spinner { color: var(--text-dim); font-size: 0.85rem; }
+  .analysis-section { margin-bottom: 0.9rem; }
+  .analysis-section h3 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.4rem; }
+  .analysis-finding {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.45;
+  }
+  .analysis-finding:last-child { border-bottom: none; }
+  .finding-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .analysis-apikey-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-shrink: 0; }
+  .analysis-apikey-row input { flex: 1; font-family: monospace; font-size: 0.8rem; }
+  #analysisRangeHint { color: var(--amber); font-size: 0.75rem; }
+
+  /* Comparison tab */
+  .compare-coin-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+  .compare-pill {
+    display: flex; align-items: center; gap: 0.4rem;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px;
+    padding: 0.3rem 0.7rem; font-size: 0.85rem; cursor: pointer; transition: border-color 0.15s;
+  }
+  .compare-pill.selected { border-color: var(--accent); background: rgba(79,140,255,0.12); }
+  .compare-pill img { width: 18px; height: 18px; border-radius: 50%; }
+  .compare-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.8rem; margin-bottom: 1.25rem; }
+  .compare-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1.1rem; }
+  .compare-card .cc-head { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; margin-bottom: 0.6rem; }
+  .compare-card .cc-head img { width: 22px; height: 22px; border-radius: 50%; }
+  .compare-card .cc-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.8rem; font-size: 0.82rem; }
+  .compare-card .cc-rows span { color: var(--text-dim); }
+  .compare-card .cc-rows b { color: var(--text); }
+  #compareReport {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.2rem; font-size: 0.88rem; line-height: 1.6;
+  }
+  #compareChatMessages { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
+
+  /* News tab */
+  .news-list { display: flex; flex-direction: column; gap: 0.8rem; }
+  .news-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.2rem; display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .news-card img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: var(--panel-2); }
+  .news-card-body { flex: 1; min-width: 0; }
+  .news-card-title { font-weight: 600; font-size: 0.95rem; margin: 0 0 0.3rem; line-height: 1.35; }
+  .news-card-title a { color: var(--text); text-decoration: none; }
+  .news-card-title a:hover { color: var(--accent); }
+  .news-card-summary { color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.4rem; }
+  .news-card-meta { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; color: var(--text-dim); }
+  .news-card-source { color: var(--accent); font-weight: 600; }
+  .news-skeleton { color: var(--text-dim); text-align: center; padding: 2rem; }
+
+  /* Chart Q&A chat */
+  #chartChat { border-top: 1px solid var(--border); margin-top: 0.75rem; padding-top: 0.75rem; }
+  #chartChat h3 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 0.5rem; }
+  #chatMessages { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .chat-msg { font-size: 0.84rem; line-height: 1.5; padding: 0.4rem 0.6rem; border-radius: 8px; max-width: 92%; }
+  .chat-msg.user { background: rgba(79,140,255,0.15); border: 1px solid rgba(79,140,255,0.25); align-self: flex-end; color: var(--text); }
+  .chat-msg.assistant { background: rgba(255,255,255,0.04); border: 1px solid var(--border); align-self: flex-start; color: var(--text); }
+  .chat-msg.thinking { color: var(--text-dim); font-style: italic; }
+  #chatInputRow { display: flex; gap: 0.5rem; }
+  #chatInputRow input { flex: 1; font-size: 0.88rem; }
+  #chatInputRow button { white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<h1>Παρακολούθηση χαρτοφυλακίου κρυπτονομισμάτων</h1>
+<p class="subtitle">Τιμές, μεταβολές, candlestick διαγράμματα και ανάλυση τάσεων από το CoinGecko (δωρεάν δημόσιο API).</p>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="watchlist">Παρακολούθηση</button>
+  <button class="tab-btn" data-tab="portfolio">Χαρτοφυλάκιο</button>
+  <button class="tab-btn" data-tab="tradingview">TradingView</button>
+  <button class="tab-btn" data-tab="compare">Σύγκριση</button>
+  <button class="tab-btn" data-tab="news">Ειδήσεις</button>
+</div>
+
+<!-- WATCHLIST TAB -->
+<div class="tab-content active" id="tab-watchlist">
+  <div class="toolbar">
+    <select id="coinSelect"></select>
+    <button id="addBtn" class="primary">+ Προσθήκη</button>
+    <div class="currency-toggle">
+      <button id="curEUR" class="active">EUR</button>
+      <button id="curUSD">USD</button>
+    </div>
+    <button id="refreshBtn">↻ Ανανέωση</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="empty" id="emptyMsg">Δεν έχεις προσθέσει νομίσματα ακόμα. Επίλεξε ένα από τη λίστα και πάτησε «Προσθήκη».</div>
+  </div>
+</div>
+
+<!-- PORTFOLIO TAB -->
+<div class="tab-content" id="tab-portfolio">
+  <div class="portfolio-summary" id="portfolioSummary"></div>
+
+  <div class="toolbar">
+    <select id="txCoinSelect"></select>
+    <select id="txTypeSelect">
+      <option value="buy">Αγορά</option>
+      <option value="sell">Πώληση</option>
+    </select>
+    <input type="number" id="txQtyInput" placeholder="Ποσότητα" min="0" step="any" style="width:120px;">
+    <input type="number" id="txPriceInput" placeholder="Τιμή ανά μονάδα" min="0" step="any" style="width:140px;">
+    <input type="date" id="txDateInput">
+    <button id="addTxBtn" class="primary">+ Προσθήκη συναλλαγής</button>
+    <span class="status" id="portfolioStatus"></span>
+  </div>
+
+  <div class="toolbar">
+    <label for="histDateInput" style="color:var(--text-dim); font-size:0.85rem;">Μεταβολή από:</label>
+    <input type="date" id="histDateInput">
+    <button id="histCalcBtn" class="primary">Υπολογισμός</button>
+    <span class="status" id="histStatus"></span>
+  </div>
+  <div id="histResultBox" style="display:none;"></div>
+
+  <h2 style="margin-top: 0.5rem;">Τρέχουσες θέσεις</h2>
+  <div class="holdings-table-wrap">
+    <table id="holdingsTable">
+      <thead>
+        <tr>
+          <th>Νόμισμα</th>
+          <th class="num">Ποσότητα</th>
+          <th class="num">Μέση τιμή κτήσης</th>
+          <th class="num">Τρέχουσα τιμή</th>
+          <th class="num">Αξία</th>
+          <th class="num">Απραγμ. P&amp;L</th>
+          <th class="num">% Χαρτοφυλακίου</th>
+        </tr>
+      </thead>
+      <tbody id="holdingsBody">
+        <tr><td colspan="7" style="color:var(--text-dim); text-align:center;">Δεν έχεις προσθέσει συναλλαγές ακόμα.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top: 1.5rem;">Ιστορικό συναλλαγών</h2>
+  <div class="holdings-table-wrap">
+    <table id="transactionsTable">
+      <thead>
+        <tr>
+          <th>Ημερομηνία</th>
+          <th>Νόμισμα</th>
+          <th>Τύπος</th>
+          <th class="num">Ποσότητα</th>
+          <th class="num">Τιμή</th>
+          <th class="num">Σύνολο</th>
+          <th class="num">P&amp;L πώλησης</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="transactionsBody">
+        <tr><td colspan="8" style="color:var(--text-dim); text-align:center;">Δεν υπάρχουν συναλλαγές.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TRADINGVIEW TAB -->
+<div class="tab-content" id="tab-tradingview">
+  <div class="toolbar">
+    <select id="tvSymbolSelect"></select>
+    <span class="status" id="tvStatus">Δεδομένα και διάγραμμα από TradingView · μόνο για οπτική αναφορά</span>
+  </div>
+  <div id="tvChartContainer" style="height: 600px;"></div>
+</div>
+
+<!-- COMPARISON TAB -->
+<div class="tab-content" id="tab-compare">
+  <h2 style="margin:0 0 0.5rem">Συγκριτική ανάλυση εβδομάδας</h2>
+  <p style="color:var(--text-dim); font-size:0.85rem; margin:0 0 0.9rem">Επίλεξε 2-5 νομίσματα και πάτησε «Ανάλυση» για συγκριτικό report από Claude.</p>
+
+  <!-- Coin selection pills -->
+  <div class="compare-coin-pills" id="comparePills"></div>
+
+  <div class="toolbar">
+    <button id="compareRunBtn" class="primary">🤖 Ανάλυση & πρόταση</button>
+    <span class="status" id="compareStatus"></span>
+  </div>
+
+  <!-- Per-coin metric cards (filled after data load) -->
+  <div class="compare-metrics" id="compareMetrics"></div>
+
+  <!-- AI report -->
+  <div id="compareReport" style="display:none;"></div>
+
+  <!-- Comparison chat -->
+  <div class="compare-chat" id="compareChatWrap" style="display:none;">
+    <h2 style="margin:0 0 0.6rem; font-size:1rem;">💬 Ερωτήσεις για τη σύγκριση</h2>
+    <div id="compareChatMessages"></div>
+    <div id="chatInputRow" style="display:flex; gap:0.5rem;">
+      <input type="text" id="compareChatInput" placeholder="π.χ. Ποιο νόμισμα έχει καλύτερη τεχνική εικόνα;" autocomplete="off">
+      <button id="compareChatSendBtn" class="primary">Αποστολή</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEWS TAB -->
+<div class="tab-content" id="tab-news">
+  <div class="toolbar">
+    <button id="newsRefreshBtn" class="primary">↻ Ανανέωση ειδήσεων</button>
+    <span class="status" id="newsStatus"></span>
+  </div>
+  <div class="news-list" id="newsList">
+    <div class="news-skeleton">Πάτησε «Ανανέωση ειδήσεων» για να φορτωθούν τα τελευταία νέα.</div>
+  </div>
+</div>
+
+<footer>
+  Σημείωση: το δωρεάν API του CoinGecko δεν παρέχει πραγματικό βιβλίο εντολών (bid/ask).
+  Ως πλησιέστερα διαθέσιμα στοιχεία προσφοράς/ζήτησης εμφανίζονται το 24ω υψηλό και χαμηλό.
+  Αυτόματη ανανέωση κάθε 60 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
+</footer>
+
+<!-- CHART MODAL -->
+<div class="modal-overlay" id="chartModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="modalTitle">Διάγραμμα</h2>
+      <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div class="modal-tools">
+      <div class="timeframe-toggle" id="timeframeToggle">
+        <button data-interval="1m" data-limit="60" class="active">1ω (1λ)</button>
+        <button data-interval="5m" data-limit="288">24ω (5λ)</button>
+        <button data-interval="1h" data-limit="168">7ημ (1ω)</button>
+        <button data-interval="1h" data-limit="720">30ημ (1ω)</button>
+        <button data-interval="4h" data-limit="1080">6μ (4ω)</button>
+        <button data-interval="1d" data-limit="365">1έτος (1ημ)</button>
+      </div>
+      <button id="regressionBtn">📉 Γραμμική παλινδρόμηση</button>
+      <button id="trendlineBtn">📈 Γραμμή τάσης (κλικ 2 σημείων)</button>
+      <button id="channelBtn">📊 Κανάλι τάσης (κλικ 2 σημείων)</button>
+      <button id="hlineBtn">➖ Οριζόντια γραμμή (κλικ 1 σημείου)</button>
+      <button id="editLinesBtn">✥ Μετακίνηση/επέκταση γραμμών</button>
+      <button id="deleteLinesBtn" style="border-color:#ef4444;color:#ef4444;">🗑 Διαγραφή γραμμής (κλικ)</button>
+      <button id="clearLinesBtn" style="border-color:#ef4444;color:#ef4444;">✕ Καθαρισμός γραμμών</button>
+      <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻ Ανανέωση</button>
+      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢ Reset zoom</button>
+      <button id="snapshotBtn">📸 Αποθήκευση</button>
+      <button id="analyzeBtn">🤖 Ανάλυση σχηματισμών</button>
+      <span class="hint" id="modalHint"></span>
+    </div>
+
+    <!-- API key row (shown only when needed) -->
+    <div class="analysis-apikey-row" id="apikeyRow" style="display:none;">
+      <label style="color:var(--text-dim);font-size:0.82rem;white-space:nowrap;">Anthropic API Key:</label>
+      <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..." autocomplete="off">
+      <button id="saveKeyBtn" class="primary">Αποθήκευση</button>
+      <button id="clearKeyBtn">Διαγραφή</button>
+      <span style="color:var(--text-dim);font-size:0.75rem;">Αποθηκεύεται μόνο τοπικά (localStorage)</span>
+    </div>
+
+    <!-- Analysis range controls -->
+    <div id="analysisRangeRow" style="display:none; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.5rem; flex-shrink:0;">
+      <span style="color:var(--text-dim);font-size:0.82rem;">Περιοχή δεδομένων:</span>
+      <select id="dataRangeSelect">
+        <option value="all">Όλα τα φορτωμένα candles</option>
+        <option value="half">Τελευταία 50%</option>
+        <option value="quarter">Τελευταία 25%</option>
+        <option value="custom">Προσαρμοσμένο εύρος (drag στο chart)</option>
+      </select>
+      <span style="color:var(--text-dim);font-size:0.82rem;">Εστίαση ανάλυσης:</span>
+      <select id="analysisRangeSelect">
+        <option value="all">Όλη η περιοχή δεδομένων</option>
+        <option value="last30">Τελευταία 30 candles</option>
+        <option value="last50">Τελευταία 50 candles</option>
+        <option value="last100">Τελευταία 100 candles</option>
+      </select>
+      <button id="runAnalysisBtn" class="primary">▶ Εκτέλεση ανάλυσης</button>
+      <span id="userLinesHint" style="color:var(--accent); font-size:0.78rem;"></span>
+      <span id="analysisRangeHint"></span>
+    </div>
+
+    <!-- User line selection for analysis (shown when user has drawn lines) -->
+    <div id="userLineSelectionRow" style="display:none; flex-wrap:wrap; gap:0.4rem; align-items:center; margin-bottom:0.4rem; flex-shrink:0;">
+      <span style="color:var(--text-dim);font-size:0.8rem;">Συμπερίληψη γραμμών μου:</span>
+      <div id="userLineCheckboxes" style="display:flex; gap:0.4rem; flex-wrap:wrap;"></div>
+      <button id="selectAllLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Όλες</button>
+      <button id="selectNoneLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Καμία</button>
+    </div>
+    <div id="patternFilterRow" style="display:none; flex-wrap:wrap; gap:0.4rem; align-items:center; margin-bottom:0.5rem; flex-shrink:0;">
+      <span style="color:var(--text-dim);font-size:0.8rem;">Εμφάνιση:</span>
+    </div>
+
+    <div class="big-chart-wrap">
+      <canvas id="bigChart"></canvas>
+      <div id="selectionOverlay" style="
+        display:none; position:absolute; top:0; bottom:0;
+        background:rgba(79,140,255,0.12); border-left:1px dashed rgba(79,140,255,0.7);
+        border-right:1px dashed rgba(79,140,255,0.7); pointer-events:none;
+      "></div>
+    </div>
+    <div class="reg-stats" id="regStats"></div>
+
+    <div id="analysisPanelBar" style="display:none; align-items:center; justify-content:space-between; background:#12151c; border-top:1px solid var(--border); padding:0.4rem 1.2rem; flex-shrink:0;">
+      <span style="color:var(--text-dim); font-size:0.78rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">🤖 Ανάλυση</span>
+      <button id="minimizeAnalysisBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.6rem;">▾ Ελαχιστοποίηση</button>
+    </div>
+    <div id="analysisPanel"></div>
+
+    <!-- Saved analyses -->
+    <div id="savedAnalysesWrap" style="display:none; flex-shrink:0; border-top:1px solid var(--border); padding:0.6rem 0 0;">
+      <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+        <button id="manualSaveBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.6rem; border-color:#22c55e; color:#22c55e;">💾 Αποθήκευση τρέχουσας κατάστασης</button>
+        <span style="color:var(--text-dim); font-size:0.8rem;">Αποθηκευμένα:</span>
+        <div id="savedAnalysesList" style="display:flex; gap:0.4rem; flex-wrap:wrap; flex:1;"></div>
+        <button id="clearSavedBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem; color:var(--red); border-color:var(--red);">✕ Διαγραφή όλων</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script>
+  // Custom candlestick renderer plugin (self-contained, no external financial
+  // chart library — that package ships ESM-only and doesn't register
+  // correctly when loaded via <script>, leaving the chart blank).
+  const candlestickPlugin = {
+    id: "candlestickRenderer",
+    afterDatasetsDraw(chart) {
+      const candleSets = chart.data.datasets
+        .map((ds, i) => ({ ds, i }))
+        .filter(({ ds }) => ds.candleData === true);
+      if (candleSets.length === 0) return;
+
+      const { ctx, scales } = chart;
+      const xScale = scales.x;
+      const yScale = scales.y;
+
+      candleSets.forEach(({ ds, i }) => {
+        const meta = chart.getDatasetMeta(i);
+        if (meta.hidden) return;
+        const data = ds.data;
+        if (!data || data.length === 0) return;
+
+        // Determine candle pixel width from spacing between points
+        let widthPx = 6;
+        if (data.length > 1) {
+          const x0 = xScale.getPixelForValue(data[0].x);
+          const x1 = xScale.getPixelForValue(data[1].x);
+          widthPx = Math.max(2, Math.abs(x1 - x0) * 0.6);
+        }
+
+        data.forEach(point => {
+          const x = xScale.getPixelForValue(point.x);
+          const yO = yScale.getPixelForValue(point.o);
+          const yH = yScale.getPixelForValue(point.h);
+          const yL = yScale.getPixelForValue(point.l);
+          const yC = yScale.getPixelForValue(point.c);
+          const isUp = point.c >= point.o;
+          const color = isUp ? (ds.upColor || "#3ddc97") : (ds.downColor || "#ff5c6c");
+
+          // Wick
+          ctx.save();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, yH);
+          ctx.lineTo(x, yL);
+          ctx.stroke();
+
+          // Body
+          const bodyTop = Math.min(yO, yC);
+          const bodyHeight = Math.max(1, Math.abs(yC - yO));
+          ctx.fillStyle = color;
+          ctx.fillRect(x - widthPx / 2, bodyTop, widthPx, bodyHeight);
+          ctx.restore();
+        });
+      });
+    }
+  };
+  if (typeof Chart !== "undefined") {
+    Chart.register(candlestickPlugin);
+  }
+</script>
+
+<script>
+const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
+
+// Register a fixed top-right tooltip positioner so it doesn't overlap candlesticks
+if (typeof Chart !== "undefined" && Chart.Tooltip) {
+  Chart.Tooltip.positioners.topRight = function(elements, eventPosition) {
+    const chart = this.chart;
+    return {
+      x: chart.chartArea.right - 10,
+      y: chart.chartArea.top + 10,
+      xAlign: "right",
+      yAlign: "top"
+    };
+  };
+}
+
+// Vertical crosshair line at cursor position
+const crosshairPlugin = {
+  id: "crosshair",
+  _x: null,
+  afterEvent(chart, args) {
+    if (chart !== bigChart) return;
+    const evt = args.event;
+    if (evt.type === "mousemove") {
+      const pos = Chart.helpers.getRelativePosition(evt, chart);
+      this._x = (pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right) ? pos.x : null;
+    } else if (evt.type === "mouseout") {
+      this._x = null;
+    }
+    args.changed = true; // force redraw
+  },
+  afterDatasetsDraw(chart) {
+    if (chart !== bigChart || this._x === null) return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(200,200,200,0.4)";
+    ctx.lineWidth = 1;
+    ctx.moveTo(this._x, chartArea.top);
+    ctx.lineTo(this._x, chartArea.bottom);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") {
+  Chart.register(crosshairPlugin);
+}
+
+const COIN_LIST = [
+  { id: "bitcoin", symbol: "BTC", name: "Bitcoin" },
+  { id: "ethereum", symbol: "ETH", name: "Ethereum" },
+  { id: "binancecoin", symbol: "BNB", name: "BNB" },
+  { id: "solana", symbol: "SOL", name: "Solana" },
+  { id: "cardano", symbol: "ADA", name: "Cardano" },
+  { id: "ripple", symbol: "XRP", name: "XRP" },
+  { id: "dogecoin", symbol: "DOGE", name: "Dogecoin" },
+  { id: "polkadot", symbol: "DOT", name: "Polkadot" },
+  { id: "litecoin", symbol: "LTC", name: "Litecoin" },
+  { id: "polygon", symbol: "MATIC", name: "Polygon" },
+  { id: "chainlink", symbol: "LINK", name: "Chainlink" },
+  { id: "avalanche-2", symbol: "AVAX", name: "Avalanche" },
+  { id: "tron", symbol: "TRX", name: "TRON" },
+  { id: "shiba-inu", symbol: "SHIB", name: "Shiba Inu" },
+  { id: "toncoin", symbol: "TON", name: "Toncoin" },
+  { id: "uniswap", symbol: "UNI", name: "Uniswap" },
+  { id: "stellar", symbol: "XLM", name: "Stellar" },
+];
+
+// Mapping from CoinGecko coin id -> Binance trading symbol (against USDT).
+// Used for higher-resolution candlestick data via Binance's free public API.
+const BINANCE_SYMBOL_MAP = {
+  bitcoin: "BTCUSDT",
+  ethereum: "ETHUSDT",
+  binancecoin: "BNBUSDT",
+  solana: "SOLUSDT",
+  cardano: "ADAUSDT",
+  ripple: "XRPUSDT",
+  dogecoin: "DOGEUSDT",
+  polkadot: "DOTUSDT",
+  litecoin: "LTCUSDT",
+  polygon: "MATICUSDT",
+  chainlink: "LINKUSDT",
+  "avalanche-2": "AVAXUSDT",
+  tron: "TRXUSDT",
+  "shiba-inu": "SHIBUSDT",
+  toncoin: "TONUSDT",
+  uniswap: "UNIUSDT",
+  stellar: "XLMUSDT",
+};
+const BINANCE_BASE = "https://api.binance.com/api/v3";
+const KRAKEN_BASE = "https://api.kraken.com/0/public";
+
+// Map our internal interval codes to Kraken's OHLC interval (in minutes).
+const KRAKEN_INTERVAL_MAP = {
+  "1m":  1,
+  "5m":  5,
+  "1h":  60,
+  "4h":  240,
+  "1d":  1440,
+  "1w":  10080
+};
+
+// Mapping from CoinGecko coin id -> Kraken EUR trading pair (TradingView symbol).
+// Used so the TradingView tab can show prices directly in EUR. Coins without
+// a Kraken EUR pair (e.g. BNB) fall back to the Binance USDT pair.
+const KRAKEN_EUR_MAP = {
+  bitcoin: "BTCEUR",
+  ethereum: "ETHEUR",
+  solana: "SOLEUR",
+  cardano: "ADAEUR",
+  ripple: "XRPEUR",
+  dogecoin: "DOGEEUR",
+  polkadot: "DOTEUR",
+  litecoin: "LTCEUR",
+  polygon: "MATICEUR",
+  chainlink: "LINKEUR",
+  "avalanche-2": "AVAXEUR",
+  tron: "TRXEUR",
+  "shiba-inu": "SHIBEUR",
+  toncoin: "TONEUR",
+  uniswap: "UNIEUR",
+  stellar: "XLMEUR",
+};
+
+const STORAGE_KEY = "crypto_tracker_watchlist_v1";
+const CURRENCY_KEY = "crypto_tracker_currency_v1";
+const PORTFOLIO_KEY = "crypto_tracker_portfolio_v1";
+const TRANSACTIONS_KEY = "crypto_tracker_transactions_v1";
+
+let watchlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || '["bitcoin","ethereum"]');
+let currency = localStorage.getItem(CURRENCY_KEY) || "eur";
+let latestMarketData = {}; // coinId -> market data object
+
+// transactions: [{ id, coinId, type: 'buy'|'sell', quantity, price, date }]
+let transactions = JSON.parse(localStorage.getItem(TRANSACTIONS_KEY) || '[]');
+let txIdCounter = transactions.reduce((max, t) => Math.max(max, t.id || 0), 0);
+
+// One-time migration: the old format stored a simple { coinId: quantity }
+// map. Convert each entry into a single "buy" transaction dated today,
+// using the current market price as the purchase price (best available
+// approximation since the original purchase price/date wasn't recorded).
+(function migrateOldPortfolio() {
+  const old = localStorage.getItem(PORTFOLIO_KEY);
+  if (!old) return;
+  try {
+    const oldPortfolio = JSON.parse(old);
+    const entries = Object.entries(oldPortfolio || {});
+    if (entries.length > 0 && transactions.length === 0) {
+      entries.forEach(([coinId, qty]) => {
+        if (!qty || qty <= 0) return;
+        transactions.push({
+          id: ++txIdCounter,
+          coinId,
+          type: "buy",
+          quantity: qty,
+          price: 0, // unknown historical price; user can edit
+          date: new Date().toISOString().split("T")[0]
+        });
+      });
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+    }
+  } catch (e) {
+    console.error("Portfolio migration error:", e);
+  }
+  localStorage.removeItem(PORTFOLIO_KEY);
+})();
+
+const grid = document.getElementById("grid");
+const emptyMsg = document.getElementById("emptyMsg");
+const statusEl = document.getElementById("status");
+const coinSelect = document.getElementById("coinSelect");
+const txCoinSelect = document.getElementById("txCoinSelect");
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "portfolio") renderPortfolio();
+    if (btn.dataset.tab === "tradingview") loadTradingViewWidget();
+    if (btn.dataset.tab === "compare") initCompareTab();
+    if (btn.dataset.tab === "news" && !newsLoaded) loadNews();
+  });
+});
+
+/* ---------- Selects ---------- */
+function populateSelects() {
+  [coinSelect, txCoinSelect].forEach(sel => {
+    sel.innerHTML = "";
+    COIN_LIST.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = `${c.name} (${c.symbol})`;
+      sel.appendChild(opt);
+    });
+  });
+
+  const tvSelect = document.getElementById("tvSymbolSelect");
+  tvSelect.innerHTML = "";
+  COIN_LIST.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = `${c.name} (${c.symbol})`;
+    tvSelect.appendChild(opt);
+  });
+  tvSelect.addEventListener("change", loadTradingViewWidget);
+}
+populateSelects();
+
+/* ---------- TradingView widget ---------- */
+function loadTradingViewWidget() {
+  const container = document.getElementById("tvChartContainer");
+  const coinId = document.getElementById("tvSymbolSelect").value;
+  const binanceSymbol = BINANCE_SYMBOL_MAP[coinId];
+  const krakenEurSymbol = KRAKEN_EUR_MAP[coinId];
+
+  let tvSymbol;
+  let statusText;
+
+  if (currency === "eur" && krakenEurSymbol) {
+    tvSymbol = `KRAKEN:${krakenEurSymbol}`;
+    statusText = "Δεδομένα και διάγραμμα από TradingView (Kraken, EUR) · μόνο για οπτική αναφορά";
+  } else if (binanceSymbol) {
+    tvSymbol = `BINANCE:${binanceSymbol}`;
+    statusText = currency === "eur"
+      ? "Δεδομένα και διάγραμμα από TradingView (Binance, USDT — δεν υπάρχει ζεύγος EUR για αυτό το νόμισμα) · μόνο για οπτική αναφορά"
+      : "Δεδομένα και διάγραμμα από TradingView (Binance, USDT) · μόνο για οπτική αναφορά";
+  } else {
+    tvSymbol = "BINANCE:BTCUSDT";
+    statusText = "Δεδομένα και διάγραμμα από TradingView · μόνο για οπτική αναφορά (χρησιμοποιείται BTCUSDT ως προεπιλογή για αυτό το νόμισμα)";
+  }
+
+  container.innerHTML = "";
+  const widgetDiv = document.createElement("div");
+  widgetDiv.className = "tradingview-widget-container";
+  widgetDiv.style.height = "100%";
+  widgetDiv.style.width = "100%";
+
+  const inner = document.createElement("div");
+  inner.className = "tradingview-widget-container__widget";
+  inner.style.height = "100%";
+  inner.style.width = "100%";
+  widgetDiv.appendChild(inner);
+  container.appendChild(widgetDiv);
+
+  const script = document.createElement("script");
+  script.type = "text/javascript";
+  script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+  script.async = true;
+  script.innerHTML = JSON.stringify({
+    autosize: true,
+    symbol: tvSymbol,
+    interval: "60",
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "el",
+    enable_publishing: false,
+    allow_symbol_change: true,
+    support_host: "https://www.tradingview.com"
+  });
+  widgetDiv.appendChild(script);
+
+  document.getElementById("tvStatus").textContent = statusText;
+}
+
+/* =====================================================
+   COMPARISON TAB
+   ===================================================== */
+let compareSelected = new Set(); // coinIds
+let _compareSummaryForChat = "";
+let _compareChatHistory = [];
+
+function initCompareTab() {
+  const pillsContainer = document.getElementById("comparePills");
+  if (pillsContainer.children.length > 0) return; // already built
+
+  // Build coin selection pills from COIN_LIST
+  COIN_LIST.forEach(coin => {
+    const pill = document.createElement("div");
+    pill.className = "compare-pill";
+    pill.dataset.id = coin.id;
+    const img = latestMarketData[coin.id]?.image
+      ? `<img src="${latestMarketData[coin.id].image}" alt="">`
+      : "";
+    pill.innerHTML = `${img}<span>${coin.symbol}</span>`;
+    pill.addEventListener("click", () => {
+      if (compareSelected.has(coin.id)) {
+        compareSelected.delete(coin.id);
+        pill.classList.remove("selected");
+      } else if (compareSelected.size < 5) {
+        compareSelected.add(coin.id);
+        pill.classList.add("selected");
+      } else {
+        document.getElementById("compareStatus").textContent = "Μέγιστο 5 νομίσματα.";
+        return;
+      }
+      document.getElementById("compareStatus").textContent =
+        compareSelected.size > 0 ? `${compareSelected.size} επιλεγμένα` : "";
+    });
+    pillsContainer.appendChild(pill);
+  });
+
+  document.getElementById("compareRunBtn").addEventListener("click", runComparison);
+  document.getElementById("compareChatSendBtn").addEventListener("click", sendCompareChat);
+  document.getElementById("compareChatInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") sendCompareChat();
+  });
+}
+
+async function runComparison() {
+  if (compareSelected.size < 2) {
+    document.getElementById("compareStatus").textContent = "Επίλεξε τουλάχιστον 2 νομίσματα.";
+    return;
+  }
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    document.getElementById("compareStatus").textContent = "Χρειάζεται API key (βλ. tab Παρακολούθηση → modal διαγράμματος).";
+    return;
+  }
+
+  const ids = Array.from(compareSelected);
+  const statusEl = document.getElementById("compareStatus");
+  const metricsEl = document.getElementById("compareMetrics");
+  const reportEl = document.getElementById("compareReport");
+  const sym = currencySymbol();
+
+  statusEl.textContent = "Φόρτωση δεδομένων...";
+  metricsEl.innerHTML = "";
+  reportEl.style.display = "none";
+  document.getElementById("compareChatWrap").style.display = "none";
+
+  // Fetch 7-day hourly candles for each coin (Kraken EUR or Binance USDT)
+  const coinData = {}; // coinId -> { meta, candles, ohlcSummary }
+
+  for (const id of ids) {
+    const meta = COIN_LIST.find(c => c.id === id);
+    const krakenSymbol = currency === "eur" ? KRAKEN_EUR_MAP[id] : null;
+    const binanceSymbol = BINANCE_SYMBOL_MAP[id];
+    let candles = [];
+    let source = "";
+
+    try {
+      if (krakenSymbol) {
+        const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=60&since=${Math.floor((Date.now() - 7*24*3600e3)/1000)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const key = Object.keys(data.result).find(k => k !== "last");
+        candles = (data.result[key] || []).map(r => [r[0]*1000, +r[1], +r[2], +r[3], +r[4]]);
+        source = `Kraken ${meta?.symbol}EUR`;
+      } else if (binanceSymbol) {
+        const url = `${BINANCE_BASE}/klines?symbol=${binanceSymbol}&interval=1h&limit=168`;
+        const res = await fetch(url);
+        const data = await res.json();
+        candles = data.map(k => [k[0], +k[1], +k[2], +k[3], +k[4], +k[5]]);
+        source = `Binance ${binanceSymbol}`;
+      }
+    } catch (e) {
+      console.error("Compare fetch error for", id, e);
+    }
+
+    if (candles.length === 0) {
+      statusEl.textContent = `Δεν ήταν δυνατή η φόρτωση δεδομένων για ${meta?.name || id}.`;
+      return;
+    }
+
+    // Compute key stats
+    const closes = candles.map(c => c[4]);
+    const highs  = candles.map(c => c[2]);
+    const lows   = candles.map(c => c[3]);
+    const open7d  = candles[0][1];
+    const close7d = closes[closes.length - 1];
+    const high7d  = Math.max(...highs);
+    const low7d   = Math.min(...lows);
+    const change7d = ((close7d - open7d) / open7d) * 100;
+    const mktData = latestMarketData[id];
+    const change24h = mktData?.price_change_percentage_24h || null;
+    const vol = mktData?.total_volume || null;
+
+    coinData[id] = { meta, candles, source, close7d, high7d, low7d, change7d, change24h, vol };
+
+    // Compact summary for AI (every 4h = every 4th candle)
+    const sampled = candles.filter((_, i) => i % 4 === 0);
+    coinData[id].ohlcSummary = sampled.map(c => {
+      const d = new Date(c[0]);
+      return `${d.toLocaleDateString("el-GR",{day:"2-digit",month:"2-digit"})} ${d.toLocaleTimeString("el-GR",{hour:"2-digit",minute:"2-digit"})}|${c[1].toFixed(2)}|${c[2].toFixed(2)}|${c[3].toFixed(2)}|${c[4].toFixed(2)}`;
+    }).join("\n");
+
+    // Render metric card
+    const card = document.createElement("div");
+    card.className = "compare-card";
+    card.innerHTML = `
+      <div class="cc-head">
+        ${mktData?.image ? `<img src="${mktData.image}" alt="">` : ""}
+        <span>${meta?.name || id}</span>
+        <span class="ticker">${meta?.symbol || ""}</span>
+      </div>
+      <div class="cc-rows">
+        <div><span>Τιμή:</span> <b>${sym}${formatNumber(close7d)}</b></div>
+        <div><span>7ημ %:</span> <b style="color:${change7d>=0?'var(--green)':'var(--red)'}">${change7d>=0?'▲':'▼'}${Math.abs(change7d).toFixed(2)}%</b></div>
+        <div><span>24ω %:</span> <b style="color:${(change24h||0)>=0?'var(--green)':'var(--red)'}">${change24h !== null ? ((change24h>=0?'▲':'▼')+Math.abs(change24h).toFixed(2)+'%') : '—'}</b></div>
+        <div><span>7ημ Υψ:</span> <b>${sym}${formatNumber(high7d)}</b></div>
+        <div><span>7ημ Χαμ:</span> <b>${sym}${formatNumber(low7d)}</b></div>
+        <div><span>Πηγή:</span> <b style="color:var(--text-dim);font-size:0.78rem">${source}</b></div>
+      </div>
+    `;
+    metricsEl.appendChild(card);
+  }
+
+  statusEl.textContent = "Ανάλυση Claude...";
+
+  // Build prompt
+  const coinBlocks = ids.map(id => {
+    const d = coinData[id];
+    return `## ${d.meta?.name || id} (${d.meta?.symbol})\nΤιμή: ${sym}${d.close7d.toFixed(2)} | 7ημ: ${d.change7d.toFixed(2)}% | 7ημ Υψ: ${sym}${d.high7d.toFixed(2)} | 7ημ Χαμ: ${sym}${d.low7d.toFixed(2)}\nOHLC (4ω δειγματοληψία, ημ/ωρα|O|H|L|C):\n${d.ohlcSummary}`;
+  }).join("\n\n");
+
+  const prompt = `Είσαι ειδικός τεχνικής ανάλυσης κρυπτονομισμάτων. Έχεις δεδομένα τελευταίας εβδομάδας για ${ids.length} νομίσματα. Κάνε συγκριτική ανάλυση.
+
+${coinBlocks}
+
+Δώσε:
+1. Σύγκριση τεχνικής εικόνας ανά νόμισμα (1-2 προτάσεις το καθένα)
+2. Ποιο έχει την καλύτερη τεχνική εικόνα βραχυπρόθεσμα (24ω) και γιατί
+3. Ποιο έχει τις καλύτερες προοπτικές μεσοπρόθεσμα (7ημ) και γιατί
+4. Γενική πρόταση: σε ποιο νόμισμα θα εστίαζες αυτήν τη στιγμή και γιατί
+
+Απάντησε στα ελληνικά, δομημένα, με επικεφαλίδες. Χωρίς επενδυτικές συμβουλές — μόνο τεχνική ανάλυση.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || "HTTP " + res.status);
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || "";
+
+    // Render report with basic markdown → HTML
+    const html = text
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2 style="font-size:1rem;margin:0.8rem 0 0.3rem">$1</h2>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+
+    reportEl.innerHTML = `<p>${html}</p>`;
+    reportEl.style.display = "block";
+
+    // Setup comparison chat
+    _compareSummaryForChat = coinBlocks;
+    _compareChatHistory = [];
+    document.getElementById("compareChatWrap").style.display = "block";
+    statusEl.textContent = `✓ Ανάλυση ολοκληρώθηκε (${ids.length} νομίσματα)`;
+
+  } catch (err) {
+    statusEl.textContent = `Σφάλμα: ${err.message}`;
+    console.error(err);
+  }
+}
+
+async function sendCompareChat() {
+  const input = document.getElementById("compareChatInput");
+  const messages = document.getElementById("compareChatMessages");
+  const question = input.value.trim();
+  if (!question) return;
+
+  const apiKey = getStoredApiKey();
+  if (!apiKey) return;
+
+  input.value = "";
+  const userBubble = document.createElement("div");
+  userBubble.className = "chat-msg user";
+  userBubble.textContent = question;
+  messages.appendChild(userBubble);
+
+  const thinkingBubble = document.createElement("div");
+  thinkingBubble.className = "chat-msg thinking";
+  thinkingBubble.textContent = "Αναλύω...";
+  messages.appendChild(thinkingBubble);
+  messages.scrollTop = messages.scrollHeight;
+
+  _compareChatHistory.push({ role: "user", content: question });
+
+  const systemPrompt = `Είσαι ειδικός τεχνικής ανάλυσης. Έχεις εβδομαδιαία OHLC δεδομένα για τα παρακάτω νομίσματα:\n\n${_compareSummaryForChat}\n\nΑπαντάς στα ελληνικά, συνοπτικά, με αναφορά σε συγκεκριμένα δεδομένα. Δεν δίνεις επενδυτικές συμβουλές.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: _compareChatHistory
+      })
+    });
+
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || "Δεν ήταν δυνατή η απάντηση.";
+    _compareChatHistory.push({ role: "assistant", content: reply });
+
+    thinkingBubble.className = "chat-msg assistant";
+    thinkingBubble.textContent = reply;
+  } catch (err) {
+    thinkingBubble.className = "chat-msg assistant";
+    thinkingBubble.textContent = `Σφάλμα: ${err.message}`;
+    _compareChatHistory.pop();
+  }
+  messages.scrollTop = messages.scrollHeight;
+  input.focus();
+}
+
+/* =====================================================
+   NEWS TAB
+   ===================================================== */
+// CryptoCompare's free news API was retired (June 2026), so we pull from
+// public RSS feeds instead, converted to JSON via the free rss2json.com
+// proxy (no API key needed for low-volume use, CORS-friendly).
+const NEWS_RSS_FEEDS = [
+  "https://www.coindesk.com/arc/outboundfeeds/rss",
+  "https://cointelegraph.com/rss"
+];
+const RSS2JSON_BASE = "https://api.rss2json.com/v1/api.json";
+let newsLoaded = false;
+let newsCache = []; // normalized articles (English) cached so re-translation doesn't refetch
+
+document.getElementById("newsRefreshBtn").addEventListener("click", () => loadNews(true));
+
+async function loadNews(forceRefresh) {
+  const listEl = document.getElementById("newsList");
+  const statusEl2 = document.getElementById("newsStatus");
+
+  if (!forceRefresh && newsCache.length > 0) {
+    renderNewsList(newsCache);
+    return;
+  }
+
+  statusEl2.textContent = "Φόρτωση ειδήσεων...";
+  listEl.innerHTML = `<div class="news-skeleton">Φόρτωση...</div>`;
+
+  try {
+    // Fetch all feeds in parallel; tolerate individual feed failures
+    const results = await Promise.allSettled(
+      NEWS_RSS_FEEDS.map(feedUrl =>
+        fetch(`${RSS2JSON_BASE}?rss_url=${encodeURIComponent(feedUrl)}&count=10`)
+          .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+      )
+    );
+
+    let articles = [];
+    results.forEach(r => {
+      if (r.status === "fulfilled" && r.value.status === "ok") {
+        const feedTitle = r.value.feed?.title || "";
+        (r.value.items || []).forEach(item => {
+          articles.push({
+            title: item.title,
+            body: (item.description || "").replace(/<[^>]+>/g, "").slice(0, 400),
+            url: item.link,
+            imageurl: item.thumbnail || item.enclosure?.link || "",
+            published_on: item.pubDate ? Math.floor(new Date(item.pubDate.replace(" ", "T") + "Z").getTime() / 1000) : null,
+            source_info: { name: feedTitle }
+          });
+        });
+      }
+    });
+
+    if (articles.length === 0) {
+      throw new Error("Δεν ήταν δυνατή η φόρτωση από καμία πηγή ειδήσεων.");
+    }
+
+    // Sort newest first, dedupe by title, cap at 15
+    articles.sort((a, b) => (b.published_on || 0) - (a.published_on || 0));
+    const seen = new Set();
+    articles = articles.filter(a => {
+      if (seen.has(a.title)) return false;
+      seen.add(a.title);
+      return true;
+    }).slice(0, 15);
+
+    newsCache = articles;
+    newsLoaded = true;
+
+    const apiKey = getStoredApiKey();
+    if (apiKey) {
+      statusEl2.textContent = "Μετάφραση στα ελληνικά...";
+      try {
+        await translateAndRenderNews(articles, apiKey);
+      } catch (err) {
+        console.error("Translation error:", err);
+        statusEl2.textContent = "Σφάλμα μετάφρασης — εμφανίζονται στα αγγλικά.";
+        renderNewsList(articles); // fallback: show untranslated
+      }
+    } else {
+      renderNewsList(articles);
+      statusEl2.textContent = "Για μετάφραση στα ελληνικά, πρόσθεσε Anthropic API key (άνοιξε ένα διάγραμμα → 🤖 Ανάλυση σχηματισμών).";
+    }
+  } catch (err) {
+    listEl.innerHTML = `<div class="news-skeleton">Σφάλμα φόρτωσης ειδήσεων: ${err.message}</div>`;
+    statusEl2.textContent = "";
+    console.error(err);
+  }
+}
+
+async function translateAndRenderNews(articles, apiKey) {
+  const statusEl2 = document.getElementById("newsStatus");
+
+  // Build a compact batch payload: id|title|body(truncated)
+  const payload = articles.map((a, i) =>
+    `[${i}] ΤΙΤΛΟΣ: ${a.title}\nΠΕΡΙΛΗΨΗ: ${(a.body || "").slice(0, 220)}`
+  ).join("\n\n");
+
+  const prompt = `Μετάφρασε τα παρακάτω ${articles.length} αγγλικά άρθρα ειδήσεων κρυπτονομισμάτων στα ελληνικά. Κράτησε τους τίτλους σύντομους και φυσικούς, και τις περιλήψεις σε 1-2 προτάσεις. Διατήρησε ονόματα νομισμάτων/εταιρειών αμετάφραστα (π.χ. Bitcoin, Ethereum, SEC).
+
+${payload}
+
+ΑΠΑΝΤΗΣΕ ΜΟΝΟ με έγκυρο JSON array (χωρίς backticks, χωρίς κείμενο εκτός JSON):
+[{"i":0,"title":"...","summary":"..."}, ...]`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || "HTTP " + res.status);
+  }
+
+  const data = await res.json();
+  const text = data.content?.[0]?.text || "";
+  let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const jsonStart = clean.indexOf("[");
+  const jsonEnd = clean.lastIndexOf("]");
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error("Μη έγκυρη απάντηση μετάφρασης.");
+  const translations = JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+
+  // Merge translations into articles
+  const merged = articles.map((a, i) => {
+    const t = translations.find(x => x.i === i);
+    return {
+      ...a,
+      titleEl: t?.title || a.title,
+      summaryEl: t?.summary || (a.body || "").slice(0, 220)
+    };
+  });
+
+  renderNewsList(merged);
+  statusEl2.textContent = `✓ ${merged.length} ειδήσεις μεταφράστηκαν`;
+}
+
+function renderNewsList(articles) {
+  const listEl = document.getElementById("newsList");
+  listEl.innerHTML = "";
+
+  articles.forEach(a => {
+    const card = document.createElement("div");
+    card.className = "news-card";
+    const date = a.published_on
+      ? new Date(a.published_on * 1000).toLocaleString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+      : "";
+    const title = a.titleEl || a.title;
+    const summary = a.summaryEl || (a.body || "").slice(0, 220);
+
+    card.innerHTML = `
+      ${a.imageurl ? `<img src="${a.imageurl}" alt="" onerror="this.style.display='none'">` : ""}
+      <div class="news-card-body">
+        <div class="news-card-title"><a href="${a.url}" target="_blank" rel="noopener">${title}</a></div>
+        <div class="news-card-summary">${summary}</div>
+        <div class="news-card-meta">
+          <span class="news-card-source">${a.source_info?.name || a.source || ""}</span>
+          <span>${date}</span>
+        </div>
+      </div>
+    `;
+    listEl.appendChild(card);
+  });
+}
+
+/* ---------- Currency toggle ---------- */
+function setCurrencyButtons() {
+  document.getElementById("curEUR").classList.toggle("active", currency === "eur");
+  document.getElementById("curUSD").classList.toggle("active", currency === "usd");
+}
+setCurrencyButtons();
+
+document.getElementById("curEUR").addEventListener("click", () => {
+  currency = "eur";
+  localStorage.setItem(CURRENCY_KEY, currency);
+  setCurrencyButtons();
+  loadData();
+  if (document.getElementById("tab-tradingview").classList.contains("active")) loadTradingViewWidget();
+  if (chartModal.classList.contains("open")) openChartModal(currentModalCoinId, latestMarketData[currentModalCoinId]?.name || currentModalCoinId, currentModalSymbol);
+});
+document.getElementById("curUSD").addEventListener("click", () => {
+  currency = "usd";
+  localStorage.setItem(CURRENCY_KEY, currency);
+  setCurrencyButtons();
+  loadData();
+  if (document.getElementById("tab-tradingview").classList.contains("active")) loadTradingViewWidget();
+  if (chartModal.classList.contains("open")) openChartModal(currentModalCoinId, latestMarketData[currentModalCoinId]?.name || currentModalCoinId, currentModalSymbol);
+});
+
+/* ---------- Watchlist actions ---------- */
+document.getElementById("addBtn").addEventListener("click", () => {
+  const id = coinSelect.value;
+  if (!watchlist.includes(id)) {
+    watchlist.push(id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
+    loadData();
+  }
+});
+document.getElementById("refreshBtn").addEventListener("click", loadData);
+
+function removeCoin(id) {
+  watchlist = watchlist.filter(c => c !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
+  loadData();
+}
+
+/* ---------- Portfolio (transaction) actions ---------- */
+function saveTransactions() {
+  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+}
+
+document.getElementById("addTxBtn").addEventListener("click", () => {
+  const coinId = txCoinSelect.value;
+  const type = document.getElementById("txTypeSelect").value;
+  const qty = parseFloat(document.getElementById("txQtyInput").value);
+  const price = parseFloat(document.getElementById("txPriceInput").value);
+  const dateVal = document.getElementById("txDateInput").value;
+  const portfolioStatus = document.getElementById("portfolioStatus");
+
+  if (!coinId || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0 || !dateVal) {
+    portfolioStatus.textContent = "Συμπλήρωσε ποσότητα, τιμή και ημερομηνία.";
+    return;
+  }
+
+  if (type === "sell") {
+    const holdings = computeHoldings();
+    const currentQty = holdings[coinId] ? holdings[coinId].quantity : 0;
+    if (qty > currentQty + 1e-9) {
+      portfolioStatus.textContent = `Δεν μπορείς να πωλήσεις ${qty} — έχεις μόνο ${currentQty} στο χαρτοφυλάκιο.`;
+      return;
+    }
+  }
+
+  transactions.push({
+    id: ++txIdCounter,
+    coinId,
+    type,
+    quantity: qty,
+    price,
+    date: dateVal
+  });
+  saveTransactions();
+
+  document.getElementById("txQtyInput").value = "";
+  document.getElementById("txPriceInput").value = "";
+  portfolioStatus.textContent = "";
+
+  // make sure we have market data for this coin too
+  if (!watchlist.includes(coinId) && !Object.keys(latestMarketData).includes(coinId)) {
+    fetchMarketDataFor([coinId]).then(renderPortfolio);
+  } else {
+    renderPortfolio();
+  }
+});
+
+function removeTransaction(id) {
+  transactions = transactions.filter(t => t.id !== id);
+  saveTransactions();
+  renderPortfolio();
+}
+
+/* Compute current holdings, average cost basis, and realized P&L from the
+   full transaction history using the average-cost method. */
+function computeHoldings() {
+  const holdings = {}; // coinId -> { quantity, avgCost, realizedPnL }
+
+  const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id);
+
+  sorted.forEach(tx => {
+    if (!holdings[tx.coinId]) {
+      holdings[tx.coinId] = { quantity: 0, avgCost: 0, realizedPnL: 0 };
+    }
+    const h = holdings[tx.coinId];
+
+    if (tx.type === "buy") {
+      const totalCostBefore = h.avgCost * h.quantity;
+      const newQuantity = h.quantity + tx.quantity;
+      const newTotalCost = totalCostBefore + tx.price * tx.quantity;
+      h.quantity = newQuantity;
+      h.avgCost = newQuantity > 0 ? newTotalCost / newQuantity : 0;
+    } else if (tx.type === "sell") {
+      const sellQty = Math.min(tx.quantity, h.quantity);
+      h.realizedPnL += (tx.price - h.avgCost) * sellQty;
+      h.quantity -= sellQty;
+      if (h.quantity <= 1e-12) {
+        h.quantity = 0;
+        // avgCost stays as-is for reference; will be overwritten by next buy
+      }
+    }
+  });
+
+  return holdings;
+}
+
+/* ---------- Formatting ---------- */
+function formatNumber(n, decimalsSmall = 4) {
+  if (n === null || n === undefined) return "—";
+  if (Math.abs(n) >= 1) {
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  }
+  return n.toLocaleString(undefined, { maximumFractionDigits: decimalsSmall, minimumFractionDigits: 2 });
+}
+function formatQty(n) {
+  if (n === null || n === undefined) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 6, minimumFractionDigits: 0 });
+}
+function formatCompact(n) {
+  if (n === null || n === undefined) return "—";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+  return n.toFixed(2);
+}
+function currencySymbol() { return currency === "eur" ? "€" : "$"; }
+
+/* ---------- Sparkline ---------- */
+function drawSparkline(canvas, data, isPositive) {
+  if (!data || data.length === 0) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  // Use offsetWidth of parent (chart-wrap) as fallback if canvas hasn't laid out yet
+  const w = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 200;
+  const h = canvas.offsetHeight || canvas.parentElement?.offsetHeight || 60;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = (max - min) || 1;
+  const step = w / (data.length - 1);
+
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = isPositive ? "#3ddc97" : "#ff5c6c";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fillStyle = isPositive ? "rgba(61,220,151,0.08)" : "rgba(255,92,108,0.08)";
+  ctx.fill();
+}
+
+/* ---------- Watchlist rendering ---------- */
+function renderCards(coins) {
+  grid.innerHTML = "";
+  if (coins.length === 0) {
+    grid.appendChild(emptyMsg);
+    return;
+  }
+  const symbol = currencySymbol();
+
+  coins.forEach(coin => {
+    const change = coin.price_change_percentage_24h;
+    const isPos = change >= 0;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="coin-name">
+          <img src="${coin.image}" alt="${coin.name}">
+          <span>${coin.name}</span>
+          <span class="ticker">${coin.symbol}</span>
+        </div>
+        <div class="head-actions">
+          <button class="icon-btn expand" title="Μεγέθυνση διαγράμματος" data-id="${coin.id}" data-name="${coin.name}">⛶</button>
+          <button class="icon-btn remove" title="Αφαίρεση" data-id="${coin.id}">✕</button>
+        </div>
+      </div>
+      <div class="price">${symbol}${formatNumber(coin.current_price)}</div>
+      <div class="change ${isPos ? 'pos' : 'neg'}">
+        ${isPos ? '▲' : '▼'} ${change === null || change === undefined ? '—' : Math.abs(change).toFixed(2) + '%'} (24ω)
+      </div>
+      <div class="badge-note">Bid/Ask μη διαθέσιμα · εμφανίζονται 24ω χαμηλό/υψηλό</div>
+      <div class="rows">
+        <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h)}</b></div>
+        <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h)}</b></div>
+        <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
+        <div>Κεφαλαιοποίηση: <b>${symbol}${formatCompact(coin.market_cap)}</b></div>
+      </div>
+      <div class="chart-wrap"><canvas></canvas></div>
+    `;
+    card.querySelector(".remove").addEventListener("click", () => removeCoin(coin.id));
+    card.querySelector(".expand").addEventListener("click", () => openChartModal(coin.id, coin.name, coin.symbol));
+    grid.appendChild(card);
+
+    const canvas = card.querySelector("canvas");
+    requestAnimationFrame(() => {
+      const sparkline = coin.sparkline_in_7d ? coin.sparkline_in_7d.price : null;
+      drawSparkline(canvas, sparkline, isPos);
+    });
+  });
+}
+
+/* ---------- Portfolio rendering ---------- */
+function renderPortfolio() {
+  const tbody = document.getElementById("holdingsBody");
+  const txBody = document.getElementById("transactionsBody");
+  const summary = document.getElementById("portfolioSummary");
+
+  if (transactions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-dim); text-align:center;">Δεν έχεις προσθέσει συναλλαγές ακόμα.</td></tr>`;
+    txBody.innerHTML = `<tr><td colspan="8" style="color:var(--text-dim); text-align:center;">Δεν υπάρχουν συναλλαγές.</td></tr>`;
+    summary.innerHTML = "";
+    _currentPortfolioTotal = 0;
+    return;
+  }
+
+  const symbol = currencySymbol();
+  const holdings = computeHoldings(); // coinId -> { quantity, avgCost, realizedPnL }
+  const holdingIds = Object.keys(holdings);
+
+  let totalValue = 0;
+  let totalUnrealizedPnL = 0;
+  let totalRealizedPnL = 0;
+  let totalInvested = 0; // current cost basis of open positions
+
+  const rows = holdingIds.map(id => {
+    const h = holdings[id];
+    const data = latestMarketData[id];
+    const price = data ? data.current_price : null;
+    const value = (price !== null && h.quantity > 0) ? price * h.quantity : (h.quantity > 0 ? null : 0);
+    const costBasis = h.avgCost * h.quantity;
+    const unrealizedPnL = (price !== null && h.quantity > 0) ? (price - h.avgCost) * h.quantity : null;
+
+    if (h.quantity > 0) {
+      if (value !== null) totalValue += value;
+      totalInvested += costBasis;
+      if (unrealizedPnL !== null) totalUnrealizedPnL += unrealizedPnL;
+    }
+    totalRealizedPnL += h.realizedPnL;
+
+    return { id, h, data, price, value, costBasis, unrealizedPnL };
+  });
+
+  rows.forEach(r => {
+    r.pct = totalValue > 0 && r.value !== null ? (r.value / totalValue) * 100 : 0;
+  });
+
+  const unrealizedIsPos = totalUnrealizedPnL >= 0;
+  const unrealizedPct = totalInvested > 0 ? (totalUnrealizedPnL / totalInvested) * 100 : 0;
+  const realizedIsPos = totalRealizedPnL >= 0;
+
+  summary.innerHTML = `
+    <div class="summary-card">
+      <div class="label">Συνολική αξία θέσεων</div>
+      <div class="value">${symbol}${formatNumber(totalValue)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Απραγματοποίητο P&amp;L</div>
+      <div class="value" style="color:${unrealizedIsPos ? 'var(--green)' : 'var(--red)'}">
+        ${unrealizedIsPos ? '▲' : '▼'} ${symbol}${formatNumber(Math.abs(totalUnrealizedPnL))} (${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%)
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Πραγματοποιημένο P&amp;L</div>
+      <div class="value" style="color:${realizedIsPos ? 'var(--green)' : 'var(--red)'}">
+        ${realizedIsPos ? '▲' : '▼'} ${symbol}${formatNumber(Math.abs(totalRealizedPnL))}
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Ανοιχτές θέσεις</div>
+      <div class="value">${rows.filter(r => r.h.quantity > 0).length}</div>
+    </div>
+  `;
+
+  // Holdings table — only open positions
+  tbody.innerHTML = "";
+  const openRows = rows.filter(r => r.h.quantity > 0).sort((a, b) => (b.value || 0) - (a.value || 0));
+  if (openRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-dim); text-align:center;">Δεν υπάρχουν ανοιχτές θέσεις.</td></tr>`;
+  } else {
+    openRows.forEach(r => {
+      const coinMeta = COIN_LIST.find(c => c.id === r.id);
+      const name = r.data ? r.data.name : (coinMeta ? coinMeta.name : r.id);
+      const sym = r.data ? r.data.symbol.toUpperCase() : (coinMeta ? coinMeta.symbol : "");
+      const img = r.data ? r.data.image : "";
+      const pnl = r.unrealizedPnL;
+      const pnlPct = r.costBasis > 0 && pnl !== null ? (pnl / r.costBasis) * 100 : 0;
+      const pnlClass = pnl === null ? "" : (pnl >= 0 ? "pos" : "neg");
+      const pnlStr = pnl === null ? "—" : `${pnl >= 0 ? '▲' : '▼'} ${symbol}${formatNumber(Math.abs(pnl))} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            ${img ? `<img src="${img}" alt="${name}" style="width:20px;height:20px;border-radius:50%;">` : ""}
+            <span>${name}</span>
+            <span class="ticker">${sym}</span>
+          </div>
+        </td>
+        <td class="num">${formatQty(r.h.quantity)}</td>
+        <td class="num">${symbol}${formatNumber(r.h.avgCost)}</td>
+        <td class="num">${r.price !== null ? symbol + formatNumber(r.price) : "—"}</td>
+        <td class="num">${r.value !== null ? symbol + formatNumber(r.value) : "—"}</td>
+        <td class="num ${pnlClass}" style="color:${pnl === null ? 'inherit' : (pnl >= 0 ? 'var(--green)' : 'var(--red)')}">${pnlStr}</td>
+        <td class="num">${r.pct.toFixed(1)}%</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Transactions table — full history, most recent first
+  txBody.innerHTML = "";
+  const holdingsSoFar = {}; // running avg cost per coin, recomputed forward for per-row P&L
+  const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id);
+  const txPnL = {}; // txId -> realized P&L for sell rows
+
+  sorted.forEach(tx => {
+    if (!holdingsSoFar[tx.coinId]) holdingsSoFar[tx.coinId] = { quantity: 0, avgCost: 0 };
+    const h = holdingsSoFar[tx.coinId];
+    if (tx.type === "buy") {
+      const totalCostBefore = h.avgCost * h.quantity;
+      const newQuantity = h.quantity + tx.quantity;
+      h.avgCost = newQuantity > 0 ? (totalCostBefore + tx.price * tx.quantity) / newQuantity : 0;
+      h.quantity = newQuantity;
+    } else {
+      const sellQty = Math.min(tx.quantity, h.quantity);
+      txPnL[tx.id] = (tx.price - h.avgCost) * sellQty;
+      h.quantity -= sellQty;
+    }
+  });
+
+  const displayOrder = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+  displayOrder.forEach(tx => {
+    const coinMeta = COIN_LIST.find(c => c.id === tx.coinId);
+    const data = latestMarketData[tx.coinId];
+    const name = data ? data.name : (coinMeta ? coinMeta.name : tx.coinId);
+    const sym = data ? data.symbol.toUpperCase() : (coinMeta ? coinMeta.symbol : "");
+    const total = tx.price * tx.quantity;
+    const pnl = tx.type === "sell" ? txPnL[tx.id] : null;
+    const pnlClass = pnl === null ? "" : (pnl >= 0 ? "pos" : "neg");
+    const pnlStr = pnl === null ? "—" : `${pnl >= 0 ? '▲' : '▼'} ${symbol}${formatNumber(Math.abs(pnl))}`;
+    const typeLabel = tx.type === "buy" ? "Αγορά" : "Πώληση";
+    const typeColor = tx.type === "buy" ? "var(--green)" : "var(--red)";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${tx.date}</td>
+      <td>${name} <span class="ticker">${sym}</span></td>
+      <td style="color:${typeColor}; font-weight:600;">${typeLabel}</td>
+      <td class="num">${formatQty(tx.quantity)}</td>
+      <td class="num">${symbol}${formatNumber(tx.price)}</td>
+      <td class="num">${symbol}${formatNumber(total)}</td>
+      <td class="num ${pnlClass}" style="color:${pnl === null ? 'inherit' : (pnl >= 0 ? 'var(--green)' : 'var(--red)')}">${pnlStr}</td>
+      <td><button class="icon-btn remove small-remove" title="Διαγραφή συναλλαγής" data-id="${tx.id}">✕</button></td>
+    `;
+    tr.querySelector(".small-remove").addEventListener("click", () => removeTransaction(tx.id));
+    txBody.appendChild(tr);
+  });
+
+  // Make current total value available to the historical-comparison feature
+  _currentPortfolioTotal = totalValue;
+}
+
+/* ---------- Historical portfolio change ---------- */
+let _currentPortfolioTotal = 0;
+
+document.getElementById("histCalcBtn").addEventListener("click", computeHistoricalChange);
+
+async function computeHistoricalChange() {
+  const dateInput = document.getElementById("histDateInput");
+  const histStatus = document.getElementById("histStatus");
+  const histBox = document.getElementById("histResultBox");
+  const dateVal = dateInput.value; // YYYY-MM-DD
+
+  if (!dateVal) {
+    histStatus.textContent = "Επίλεξε μια ημερομηνία.";
+    return;
+  }
+
+  const holdings = computeHoldings();
+  const ids = Object.keys(holdings).filter(id => holdings[id].quantity > 0);
+  if (ids.length === 0) {
+    histStatus.textContent = "Δεν υπάρχουν ανοιχτές θέσεις στο χαρτοφυλάκιο.";
+    return;
+  }
+
+  const selectedDate = new Date(dateVal + "T00:00:00");
+  if (selectedDate.getTime() > Date.now()) {
+    histStatus.textContent = "Η ημερομηνία πρέπει να είναι στο παρελθόν.";
+    return;
+  }
+
+  // CoinGecko expects dd-mm-yyyy
+  const [y, m, d] = dateVal.split("-");
+  const cgDate = `${d}-${m}-${y}`;
+
+  histBox.style.display = "none";
+  histStatus.textContent = "Υπολογισμός...";
+
+  const symbol = currencySymbol();
+  let historicalTotal = 0;
+  let missing = [];
+
+  // CoinGecko free tier rate-limits aggressively; query sequentially with a
+  // short delay between requests to avoid 429s.
+  for (const id of ids) {
+    try {
+      const url = `${COINGECKO_BASE}/coins/${id}/history?date=${cgDate}&localization=false`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const histPrice = data.market_data && data.market_data.current_price
+        ? data.market_data.current_price[currency]
+        : null;
+      if (histPrice === null || histPrice === undefined) {
+        missing.push(id);
+        continue;
+      }
+      historicalTotal += histPrice * holdings[id].quantity;
+      // small delay to be gentle with the free API rate limit
+      await new Promise(r => setTimeout(r, 350));
+    } catch (err) {
+      console.error(err);
+      missing.push(id);
+    }
+  }
+
+  if (historicalTotal === 0) {
+    histStatus.textContent = "Δεν ήταν δυνατή η ανάκτηση ιστορικών τιμών (πιθανό rate limit). Δοκίμασε ξανά σε λίγο.";
+    return;
+  }
+
+  const currentTotal = _currentPortfolioTotal;
+  const changeAbs = currentTotal - historicalTotal;
+  const changePct = historicalTotal > 0 ? (changeAbs / historicalTotal) * 100 : 0;
+  const isPos = changeAbs >= 0;
+
+  const dateLabel = selectedDate.toLocaleDateString("el-GR", { day: "numeric", month: "long", year: "numeric" });
+
+  let missingNote = "";
+  if (missing.length > 0) {
+    const names = missing.map(id => {
+      const meta = COIN_LIST.find(c => c.id === id);
+      return meta ? meta.symbol : id;
+    }).join(", ");
+    missingNote = `<div class="hist-note">Δεν βρέθηκαν ιστορικά δεδομένα για: ${names} — δεν συμπεριλήφθηκαν στον υπολογισμό.</div>`;
+  }
+
+  histBox.innerHTML = `
+    <div class="hist-row">
+      <div>
+        <div class="hist-sub">Αξία στις ${dateLabel}</div>
+        <div class="hist-main">${symbol}${formatNumber(historicalTotal)}</div>
+      </div>
+      <div>
+        <div class="hist-sub">Αξία σήμερα</div>
+        <div class="hist-main">${symbol}${formatNumber(currentTotal)}</div>
+      </div>
+      <div>
+        <div class="hist-sub">Μεταβολή</div>
+        <div class="hist-main" style="color:${isPos ? 'var(--green)' : 'var(--red)'}">
+          ${isPos ? '▲' : '▼'} ${symbol}${formatNumber(Math.abs(changeAbs))} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
+        </div>
+      </div>
+    </div>
+    ${missingNote}
+    <div class="hist-note" style="color:var(--text-dim);">
+      Η σύγκριση βασίζεται στις τρέχουσες ποσότητες θέσεων εφαρμοσμένες στις ιστορικές τιμές —
+      αν άλλαξες ποσότητες από τότε, η μεταβολή είναι ενδεικτική και όχι το πραγματικό σου P&amp;L.
+    </div>
+  `;
+  histBox.style.display = "block";
+  histStatus.textContent = "";
+}
+
+/* ---------- Data loading ---------- */
+let isLoading = false;
+
+async function fetchMarketDataFor(ids, retries = 2) {
+  if (ids.length === 0) return [];
+  try {
+    const url = `${COINGECKO_BASE}/coins/markets?vs_currency=${currency}&ids=${ids.join(",")}&order=market_cap_desc&sparkline=true&price_change_percentage=24h`;
+    const res = await fetch(url);
+
+    if (res.status === 429) {
+      // Rate limited — wait and retry
+      if (retries > 0) {
+        statusEl.textContent = "Rate limit CoinGecko — επαναπροσπάθεια σε 8 δλ...";
+        await new Promise(r => setTimeout(r, 8000));
+        return fetchMarketDataFor(ids, retries - 1);
+      }
+      throw new Error("Rate limit (429) — δοκίμασε ξανά σε λίγο.");
+    }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    data.forEach(c => { latestMarketData[c.id] = c; });
+    return data;
+  } catch (err) {
+    console.error("fetchMarketDataFor error:", err);
+    throw err; // propagate so loadData can show the message
+  }
+}
+
+async function loadData() {
+  if (isLoading) return;
+  isLoading = true;
+  statusEl.textContent = "Ενημέρωση...";
+
+  try {
+    const portfolioIds = Array.from(new Set(transactions.map(t => t.coinId)));
+    const allIds = Array.from(new Set([...watchlist, ...portfolioIds]));
+    if (allIds.length > 0) {
+      await fetchMarketDataFor(allIds);
+    }
+
+    const ordered = watchlist.map(id => latestMarketData[id]).filter(Boolean);
+    renderCards(ordered);
+    renderPortfolio();
+
+    statusEl.textContent = "Τελ. ενημέρωση: " + new Date().toLocaleTimeString();
+  } catch (err) {
+    statusEl.textContent = `Σφάλμα: ${err.message}`;
+    console.error(err);
+    // Still render cards with whatever data we already have cached
+    const ordered = watchlist.map(id => latestMarketData[id]).filter(Boolean);
+    if (ordered.length > 0) renderCards(ordered);
+  } finally {
+    isLoading = false;
+  }
+}
+
+/* =====================================================
+   CHART MODAL: candlesticks + trendlines + regression
+   ===================================================== */
+const chartModal = document.getElementById("chartModal");
+const modalTitle = document.getElementById("modalTitle");
+const bigChartCanvas = document.getElementById("bigChart");
+const modalHint = document.getElementById("modalHint");
+const regStatsEl = document.getElementById("regStats");
+
+// Cached refs for frequently-queried analysis elements
+const $analysisPanel    = () => document.getElementById("analysisPanel");
+const $analysisHint     = () => document.getElementById("analysisRangeHint");
+const $apikeyRow        = () => document.getElementById("apikeyRow");
+const $analyzeBtn       = () => document.getElementById("analyzeBtn");
+const $patternFilterRow = () => document.getElementById("patternFilterRow");
+const $userLineRow      = () => document.getElementById("userLineSelectionRow");
+const $userLinesHint    = () => document.getElementById("userLinesHint");
+
+let bigChart = null;
+let currentModalCoinId = null;
+let currentInterval = "1m";
+let currentLimit = 60;
+let currentModalSymbol = "";
+let dataSource = "binance"; // "binance" | "kraken" | "coingecko"
+
+// Drawing tools
+let activeTool = null; // null | "trend" | "channel" | "hline" | "edit" | "delete"
+let trendlinePoints = []; // accumulates clicks for current drawing (max 2)
+let channelOffset = null; // y-offset for the parallel channel line
+// manualLines: { id, type: 'trend'|'horizontal', p1: {x,y}, p2: {x,y} }
+let manualLines = [];
+let hiddenPatternTypes = new Set(); // AI pattern types currently hidden
+let regressionLine = null; // {points: [...], slope, intercept} or null
+let lineIdCounter = 0;
+
+// Drag state for edit mode
+let dragState = null; // { lineId, endpoint: 'p1'|'p2' }
+const HIT_RADIUS_PX = 10;
+
+document.getElementById("closeModalBtn").addEventListener("click", closeChartModal);
+
+document.getElementById("timeframeToggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#timeframeToggle button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  currentInterval = btn.dataset.interval;
+  currentLimit = parseInt(btn.dataset.limit, 10);
+  resetDrawings();
+  loadModalChart();
+});
+
+document.getElementById("trendlineBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "trend" ? null : "trend");
+});
+
+document.getElementById("channelBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "channel" ? null : "channel");
+});
+
+document.getElementById("hlineBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "hline" ? null : "hline");
+});
+
+document.getElementById("editLinesBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "edit" ? null : "edit");
+});
+
+document.getElementById("deleteLinesBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "delete" ? null : "delete");
+});
+
+document.getElementById("regressionBtn").addEventListener("click", () => {
+  computeRegression();
+});
+
+document.getElementById("clearLinesBtn").addEventListener("click", () => {
+  resetDrawings();
+  renderBigChart();
+});
+
+// Refresh: reload candle data without clearing drawn lines/tools
+document.getElementById("modalRefreshBtn").addEventListener("click", () => {
+  loadModalChart();
+});
+
+document.getElementById("resetZoomBtn").addEventListener("click", () => {
+  if (bigChart) {
+    // Clear manual y-axis override so it autoscales again
+    bigChart.options.scales.y.min = undefined;
+    bigChart.options.scales.y.max = undefined;
+    bigChart.resetZoom();
+  }
+});
+
+// Ctrl+wheel over the chart rescales the price (y) axis around the cursor;
+// plain wheel still zooms the time (x) axis via chartjs-plugin-zoom.
+bigChartCanvas.addEventListener("wheel", (evt) => {
+  if (!bigChart || !evt.ctrlKey) return;
+  evt.preventDefault();
+  evt.stopImmediatePropagation();
+
+  const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+  const yScale = bigChart.scales.y;
+  const cursorValue = yScale.getValueForPixel(pos.y);
+  const curMin = yScale.min, curMax = yScale.max;
+
+  const factor = evt.deltaY > 0 ? 1.08 : 1 / 1.08; // scroll down = zoom out
+  const newRange = (curMax - curMin) * factor;
+  const ratio = (cursorValue - curMin) / (curMax - curMin);
+
+  const newMin = cursorValue - ratio * newRange;
+  const newMax = newMin + newRange;
+  bigChart.options.scales.y.min = newMin;
+  bigChart.options.scales.y.max = newMax;
+  bigChart.update("none");
+}, { passive: false });
+
+document.getElementById("snapshotBtn").addEventListener("click", async () => {
+  if (!bigChart) return;
+
+  const coinTitle = document.getElementById("modalTitle").textContent;
+  const timeframeBtn = document.querySelector("#timeframeToggle button.active");
+  const timeframe = timeframeBtn ? timeframeBtn.textContent.trim() : "";
+  const dateStr = new Date().toLocaleString("el-GR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
+
+  // Collect analysis report text if available
+  const reportEl = $analysisPanel();
+  const reportText = reportEl?.classList.contains("open") ? reportEl.innerText.trim() : "";
+
+  // Measure canvas physical size
+  const chartCanvas = bigChartCanvas;
+  const cw = chartCanvas.width;   // physical pixels (HiDPI)
+  const ch = chartCanvas.height;
+
+  // Header height + report section height (estimated via DOM)
+  const padding = 24;
+  const headerH = 56;
+  const reportLines = reportText ? reportText.split("\n").filter(l => l.trim()) : [];
+  const lineH = 18;
+  const reportH = reportText ? Math.min(reportLines.length * lineH + padding * 2, 400) : 0;
+
+  const totalH = headerH + ch + reportH + padding;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = cw;
+  offscreen.height = totalH;
+  const ctx = offscreen.getContext("2d");
+
+  // Background
+  ctx.fillStyle = "#0f1115";
+  ctx.fillRect(0, 0, cw, totalH);
+
+  // Header
+  ctx.fillStyle = "#e8eaed";
+  ctx.font = `bold ${Math.round(cw * 0.016)}px 'Segoe UI', Arial, sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(coinTitle + "  ·  " + timeframe + "  ·  " + dateStr, padding, headerH / 2);
+
+  // Chart image
+  ctx.drawImage(chartCanvas, 0, headerH, cw, ch);
+
+  // Report section
+  if (reportText) {
+    const startY = headerH + ch + padding;
+    ctx.fillStyle = "#1f232c";
+    ctx.fillRect(0, startY - padding / 2, cw, reportH + padding / 2);
+
+    ctx.font = `${Math.round(cw * 0.012)}px 'Segoe UI', Arial, sans-serif`;
+    ctx.textBaseline = "top";
+    const maxW = cw - padding * 2;
+    let y = startY;
+    const fontSize = Math.round(cw * 0.012);
+
+    for (const rawLine of reportLines) {
+      if (y > startY + reportH - lineH) break;
+      const line = rawLine.replace(/[⚠✓▲▼→💬🤖]/gu, "").trim();
+      if (!line) { y += lineH * 0.5; continue; }
+
+      // Section headers (short ALL-CAPS lines)
+      if (line === line.toUpperCase() && line.length < 40) {
+        ctx.fillStyle = "#9aa1ac";
+        ctx.font = `bold ${fontSize}px 'Segoe UI', Arial, sans-serif`;
+      } else {
+        ctx.fillStyle = "#c9cdd4";
+        ctx.font = `${fontSize}px 'Segoe UI', Arial, sans-serif`;
+      }
+
+      // Word-wrap long lines
+      const words = line.split(" ");
+      let current = "";
+      for (const word of words) {
+        const test = current ? current + " " + word : word;
+        if (ctx.measureText(test).width > maxW) {
+          ctx.fillText(current, padding, y);
+          y += lineH;
+          current = word;
+          if (y > startY + reportH - lineH) break;
+        } else {
+          current = test;
+        }
+      }
+      if (current) { ctx.fillText(current, padding, y); y += lineH; }
+    }
+  }
+
+  // Watermark
+  ctx.font = `${Math.round(cw * 0.01)}px 'Segoe UI', Arial, sans-serif`;
+  ctx.fillStyle = "rgba(150,150,150,0.4)";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("Δεν αποτελεί επενδυτική συμβουλή", cw - padding, totalH - 6);
+
+  // Download
+  const link = document.createElement("a");
+  const safeName = coinTitle.replace(/[^a-zA-Z0-9\u0370-\u03FF]/g, "_").slice(0, 40);
+  link.download = `${safeName}_${timeframe.replace(/\s/g,"")}_${new Date().toISOString().slice(0,10)}.png`;
+  link.href = offscreen.toDataURL("image/png");
+  link.click();
+});
+
+/* =====================================================
+   AI PATTERN ANALYSIS SYSTEM
+   ===================================================== */
+const APIKEY_STORAGE = "crypto_tracker_anthropic_key_v1";
+const PATTERN_COLORS = {
+  trend:     "#f97316", // πορτοκαλί
+  triangle:  "#94a3b8", // γκρι-μπλε (αντί μαύρο — ορατό σε dark theme)
+  w_pattern: "#e879f9", // μωβ/φούξια
+  support:   "#22c55e", // πράσινο
+  reversal:  "#ef4444", // κόκκινο
+  resistance:"#f59e0b"  // κίτρινο
+};
+
+function getStoredApiKey() {
+  return localStorage.getItem(APIKEY_STORAGE) || "";
+}
+
+document.getElementById("analyzeBtn").addEventListener("click", () => {
+  const panel = $analysisPanel();
+  const apikeyRow = $apikeyRow();
+  const rangeRow = document.getElementById("analysisRangeRow");
+  const bar = document.getElementById("analysisPanelBar");
+  const isOpen = panel.classList.contains("open");
+
+  if (!isOpen) {
+    panel.classList.add("open");
+    panel.classList.remove("minimized");
+    bar.style.display = "flex";
+    setMinimizeButtonState(false);
+    apikeyRow.style.display = getStoredApiKey() ? "none" : "flex";
+    rangeRow.style.display = "flex";
+    document.getElementById("analyzeBtn").classList.add("active");
+    renderSavedAnalysesList(); // show saved analyses list
+    refreshUserLineSelectionUI(); // show user line checkboxes if any
+    // Show how many user lines will be included
+    const userLineCount = manualLines.filter(l => !l.aiGenerated).length;
+    const hint = $userLinesHint();
+    if (hint) hint.textContent = userLineCount > 0 ? `📐 ${userLineCount} δικές σου γραμμές θα συμπεριληφθούν` : "";
+  } else {
+    panel.classList.remove("open");
+    panel.classList.remove("minimized");
+    bar.style.display = "none";
+    apikeyRow.style.display = "none";
+    rangeRow.style.display = "none";
+    document.getElementById("analyzeBtn").classList.remove("active");
+    panel.innerHTML = "";
+  }
+});
+
+document.getElementById("minimizeAnalysisBtn").addEventListener("click", () => {
+  const panel = $analysisPanel();
+  const isMinimized = panel.classList.toggle("minimized");
+  setMinimizeButtonState(isMinimized);
+});
+
+function setMinimizeButtonState(isMinimized) {
+  const btn = document.getElementById("minimizeAnalysisBtn");
+  btn.textContent = isMinimized ? "▸ Επαναφορά" : "▾ Ελαχιστοποίηση";
+}
+
+document.getElementById("saveKeyBtn").addEventListener("click", () => {
+  const key = document.getElementById("anthropicKeyInput").value.trim();
+  if (!key.startsWith("sk-ant-")) {
+    $analysisHint().textContent = "Μη έγκυρο κλειδί — πρέπει να αρχίζει με sk-ant-";
+    return;
+  }
+  localStorage.setItem(APIKEY_STORAGE, key);
+  $apikeyRow().style.display = "none";
+  document.getElementById("anthropicKeyInput").value = "";
+  $analysisHint().textContent = "✓ API key αποθηκεύτηκε.";
+});
+
+document.getElementById("clearKeyBtn").addEventListener("click", () => {
+  localStorage.removeItem(APIKEY_STORAGE);
+  $apikeyRow().style.display = "flex";
+  document.getElementById("anthropicKeyInput").value = "";
+  $analysisHint().textContent = "API key διαγράφηκε.";
+});
+
+document.getElementById("runAnalysisBtn").addEventListener("click", runPatternAnalysis);
+
+async function runPatternAnalysis() {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    $apikeyRow().style.display = "flex";
+    $analysisHint().textContent = "Χρειάζεται API key για να εκτελεστεί η ανάλυση.";
+    return;
+  }
+
+  const candles = _lastCandles;
+  if (!candles || candles.length < 10) {
+    $analysisHint().textContent = "Δεν υπάρχουν αρκετά δεδομένα για ανάλυση.";
+    return;
+  }
+
+  // Determine data window
+  const dataRangeVal = document.getElementById("dataRangeSelect").value;
+  let dataCandles = candles;
+  if (dataRangeVal === "half") dataCandles = candles.slice(-Math.floor(candles.length / 2));
+  else if (dataRangeVal === "quarter") dataCandles = candles.slice(-Math.floor(candles.length / 4));
+  else if (dataRangeVal === "custom" && analysisCustomRange) {
+    dataCandles = candles.slice(analysisCustomRange.startIdx, analysisCustomRange.endIdx + 1);
+  }
+
+  // Determine analysis focus window within the data candles
+  const analysisRangeVal = document.getElementById("analysisRangeSelect").value;
+  let analysisCandles = dataCandles;
+  if (analysisRangeVal === "last30") analysisCandles = dataCandles.slice(-Math.min(30, dataCandles.length));
+  else if (analysisRangeVal === "last50") analysisCandles = dataCandles.slice(-Math.min(50, dataCandles.length));
+  else if (analysisRangeVal === "last100") analysisCandles = dataCandles.slice(-Math.min(100, dataCandles.length));
+
+  const panel = $analysisPanel();
+  $analysisHint().textContent =
+    `Ανάλυση ${analysisCandles.length} candles από σύνολο ${dataCandles.length}...`;
+  panel.innerHTML = `<div class="analysis-spinner">🔍 Ανάλυση σε εξέλιξη...</div>`;
+
+  // Build a compact OHLC summary to send (keep token count low)
+  // Limit candles sent to model — more than 120 adds little value and risks
+  // truncating the JSON response. Sample evenly if we have more.
+  let modelCandles = analysisCandles;
+  if (analysisCandles.length > 120) {
+    const step = analysisCandles.length / 120;
+    modelCandles = Array.from({ length: 120 }, (_, i) => analysisCandles[Math.round(i * step)]);
+  }
+
+  const coinName = modalTitle.textContent.split(" —")[0];
+  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const useTime = currentInterval === "1m" || currentInterval === "5m" || currentInterval === "1h";
+
+  // Build a timestamp→candle lookup for the drawing phase
+  const tsByCandle = {};
+  modelCandles.forEach(c => { tsByCandle[c[0]] = c; });
+
+  const ohlcSummary = modelCandles.map(c => {
+    const d = new Date(c[0]);
+    const label = useTime
+      ? d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" }) + " " +
+        d.toLocaleTimeString("el-GR", { hour:"2-digit", minute:"2-digit" })
+      : d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"2-digit" });
+    return `${c[0]}|${label}|${c[1].toFixed(2)}|${c[2].toFixed(2)}|${c[3].toFixed(2)}|${c[4].toFixed(2)}`;
+  }).join("\n");
+
+  const lastCandle = modelCandles[modelCandles.length - 1];
+  const lastPrice = lastCandle ? lastCandle[4].toFixed(2) : "άγνωστη";
+  const lastDate = lastCandle ? new Date(lastCandle[0]).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+
+  // Describe user-drawn lines so Claude can incorporate them in the analysis
+  const userLines = manualLines.filter(l => !l.aiGenerated && l.includeInAnalysis !== false);
+  let userLinesSection = "";
+  if (userLines.length > 0) {
+    const sym = currencySymbol();
+    const lineDescs = userLines.map(l => {
+      const fmt = (ts) => new Date(ts).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+      if (l.type === "horizontal") {
+        return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y)}`;
+      } else if (l.type === "channel") {
+        return `• Κανάλι τάσης: κεντρική γραμμή από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)}), πλάτος offset ${sym}${formatNumber(Math.abs(l.offset || 0))}`;
+      } else {
+        return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)})`;
+      }
+    }).join("\n");
+    userLinesSection = `\nΠαρατηρήσεις χρήστη (γραμμές που έχει σχεδιάσει ο χρήστης — λάβε τες υπόψη στην ανάλυση και σχολίασέ τες):
+${lineDescs}\n`;
+  }
+
+  const prompt = `Είσαι ειδικός τεχνικής ανάλυσης κρυπτονομισμάτων. Αναλύεις OHLC δεδομένα για ${coinName} (interval: ${interval}, ${modelCandles.length} candles).
+
+Δεδομένα (timestamp_ms|ημ/ωρα|O|H|L|C):
+${ohlcSummary}
+
+Τελευταία τιμή: ${lastPrice} (${lastDate})
+${userLinesSection}
+Εντόπισε σχηματισμούς: γραμμές τάσης, τρίγωνα, W/M, στήριξη/αντίσταση, αναστροφές τάσης.
+Δώσε ΜΕΧΡΙ 6 ευρήματα (τα πιο σημαντικά). Για κάθε εύρημα: τύπο, σύντομη εξήγηση (1 πρόταση), timestamps, αξιοπιστία.${userLines.length > 0 ? " Αν κάποιο εύρημα σχετίζεται με γραμμή του χρήστη, ανέφερέ το στην explanation." : ""}
+
+Επίσης δώσε πρόβλεψη τιμής για:
+- 24 ώρες: εκτιμώμενη τιμή-στόχος και κατεύθυνση (up/down/sideways)
+- 1 εβδομάδα: εκτιμώμενη τιμή-στόχος και κατεύθυνση
+
+ΑΠΑΝΤΗΣΕ ΜΟΝΟ με έγκυρο JSON (χωρίς backticks, χωρίς κείμενο εκτός JSON):
+{"findings":[{"type":"trend|triangle|w_pattern|support|resistance|reversal","label":"...","explanation":"...","confidence":"high|medium|low","drawing":{"kind":"line|polygon|hline","timestamps":[ts1,ts2],"price":null}}],"summary":"...","forecast":{"h24":{"price":0.0,"direction":"up|down|sideways","note":"..."},"w1":{"price":0.0,"direction":"up|down|sideways","note":"..."}}}
+
+Κανόνες: hline→timestamps:[],price:αριθμός | line→2 timestamps | polygon→3-4 timestamps. Timestamps ΑΚΡΙΒΩΣ από τα δεδομένα. Σύντομα labels/explanations. Η πρόβλεψη είναι εκτίμηση βάσει τεχνικής ανάλυσης, όχι εγγύηση.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || "HTTP " + res.status);
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || "";
+    let parsed;
+    try {
+      // Strip markdown fences and any preamble text, then find the first
+      // complete JSON object in the response regardless of formatting.
+      let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const jsonStart = clean.indexOf("{");
+      const jsonEnd = clean.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error("no JSON object found");
+      clean = clean.slice(jsonStart, jsonEnd + 1);
+      parsed = JSON.parse(clean);
+    } catch (e) {
+      // Log the raw response to help diagnose
+      console.error("Raw model response:", text);
+      throw new Error(`Μη έγκυρη απάντηση JSON από το μοντέλο. (${e.message})`);
+    }
+
+    renderAnalysisResults(parsed, analysisCandles, tsByCandle, ohlcSummary, coinName, interval);
+    $analysisHint().textContent =
+      `✓ Βρέθηκαν ${parsed.findings?.length || 0} σχηματισμοί.`;
+
+  } catch (err) {
+    panel.innerHTML = `<div style="color:var(--red)">Σφάλμα ανάλυσης: ${err.message}</div>`;
+    $analysisHint().textContent = "";
+    console.error(err);
+  }
+}
+
+/* Shared helper: convert AI findings into manualLines.
+   Used by renderAnalysisResults (live) and loadSavedAnalysis (restore). */
+function applyFindingsToChart(findings, tsByCandle, fallbackCandles) {
+  function candleByTs(ts) {
+    if (tsByCandle?.[ts]) return tsByCandle[ts];
+    if (!tsByCandle) return null;
+    const keys = Object.keys(tsByCandle).map(Number);
+    if (!keys.length) return null;
+    return tsByCandle[keys.reduce((a, b) => Math.abs(b - ts) < Math.abs(a - ts) ? b : a)];
+  }
+  findings.forEach(f => {
+    const color = PATTERN_COLORS[f.type] || "#ffffff";
+    const d = f.drawing;
+    if (!d) return;
+    const getCandles = () => {
+      if (d.timestamps?.length) return d.timestamps.map(ts => candleByTs(ts)).filter(Boolean);
+      if (d.indexes?.length && fallbackCandles) return d.indexes.map(i => fallbackCandles[i]).filter(Boolean);
+      return [];
+    };
+    const useY = (c) => (f.type === "support" || f.type === "resistance") ? c[3] : c[4];
+    if (d.kind === "line") {
+      const pts = getCandles(); if (pts.length < 2) return;
+      manualLines.push({ id: ++lineIdCounter, type: "trend",
+        p1: { x: pts[0][0], y: useY(pts[0]) }, p2: { x: pts[1][0], y: useY(pts[1]) },
+        aiGenerated: true, aiColor: color, aiPatternType: f.type });
+    } else if (d.kind === "polygon") {
+      const pts = getCandles(); if (pts.length < 2) return;
+      for (let i = 0; i < pts.length - 1; i++)
+        manualLines.push({ id: ++lineIdCounter, type: "trend",
+          p1: { x: pts[i][0], y: pts[i][4] }, p2: { x: pts[i+1][0], y: pts[i+1][4] },
+          aiGenerated: true, aiColor: color, aiPatternType: f.type });
+      if (pts.length >= 3)
+        manualLines.push({ id: ++lineIdCounter, type: "trend",
+          p1: { x: pts[pts.length-1][0], y: pts[pts.length-1][4] },
+          p2: { x: pts[0][0], y: pts[0][4] },
+          aiGenerated: true, aiColor: color, aiPatternType: f.type });
+    } else if (d.kind === "hline" && d.price) {
+      const xMin = bigChart?.scales?.x?.min ?? (fallbackCandles?.[0]?.[0] ?? 0);
+      const xMax = bigChart?.scales?.x?.max ?? (fallbackCandles?.[fallbackCandles.length-1]?.[0] ?? Date.now());
+      manualLines.push({ id: ++lineIdCounter, type: "horizontal",
+        p1: { x: xMin, y: d.price }, p2: { x: xMax, y: d.price },
+        aiGenerated: true, aiColor: color, aiPatternType: f.type });
+    }
+  });
+}
+
+function renderAnalysisResults(data, analysisCandles, tsByCandle, ohlcSummaryForChat, coinName, interval) {
+  const panel = $analysisPanel();
+  const findings = data.findings || [];
+
+  // Remove previous AI lines, apply new ones
+  manualLines = manualLines.filter(l => !l.aiGenerated);
+  applyFindingsToChart(findings, tsByCandle, analysisCandles);
+  if (bigChart) bigChart.update();
+
+  // Build pattern filter toggles
+  const filterRow = $patternFilterRow();
+  filterRow.style.display = "flex";
+  // Keep only the label span, remove old buttons
+  filterRow.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem;">Εμφάνιση:</span>`;
+
+  const presentTypes = [...new Set(findings.map(f => f.type))];
+  presentTypes.forEach(type => {
+    const color = PATTERN_COLORS[type] || "#fff";
+    const label = { trend:"Τάση", triangle:"Τρίγωνο", w_pattern:"W/M",
+                    support:"Στήριξη", resistance:"Αντίσταση", reversal:"Αναστροφή" }[type] || type;
+    const btn = document.createElement("button");
+    btn.className = "small active";
+    btn.dataset.ptype = type;
+    btn.style.cssText = `border-color:${color}; background:${color}22; color:${color}; font-size:0.78rem; padding:0.25rem 0.6rem;`;
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      if (hiddenPatternTypes.has(type)) {
+        hiddenPatternTypes.delete(type);
+        btn.style.opacity = "1";
+      } else {
+        hiddenPatternTypes.add(type);
+        btn.style.opacity = "0.35";
+      }
+      if (bigChart) bigChart.update();
+    });
+    filterRow.appendChild(btn);
+  });
+
+  // "Κανένα" / "Όλα" buttons
+  if (presentTypes.length > 1) {
+    const allBtn = document.createElement("button");
+    allBtn.textContent = "Όλα";
+    allBtn.className = "small";
+    allBtn.style = "font-size:0.78rem; padding:0.25rem 0.6rem;";
+    allBtn.addEventListener("click", () => {
+      hiddenPatternTypes.clear();
+      filterRow.querySelectorAll("[data-ptype]").forEach(b => b.style.opacity = "1");
+      if (bigChart) bigChart.update();
+    });
+    const noneBtn = document.createElement("button");
+    noneBtn.textContent = "Κανένα";
+    noneBtn.className = "small";
+    noneBtn.style = "font-size:0.78rem; padding:0.25rem 0.6rem;";
+    noneBtn.addEventListener("click", () => {
+      presentTypes.forEach(t => hiddenPatternTypes.add(t));
+      filterRow.querySelectorAll("[data-ptype]").forEach(b => b.style.opacity = "0.35");
+      if (bigChart) bigChart.update();
+    });
+    filterRow.appendChild(allBtn);
+    filterRow.appendChild(noneBtn);
+  }
+
+  // Build report HTML
+  const typeLabels = {
+    trend: "Γραμμή τάσης", triangle: "Τρίγωνο",
+    w_pattern: "W/M σχηματισμός", support: "Στήριξη",
+    reversal: "Αναστροφή τάσης", resistance: "Αντίσταση"
+  };
+  const confidenceLabel = { high: "Υψηλή", medium: "Μέτρια", low: "Χαμηλή" };
+
+  const grouped = {};
+  findings.forEach(f => {
+    if (!grouped[f.type]) grouped[f.type] = [];
+    grouped[f.type].push(f);
+  });
+
+  let html = "";
+  if (data.summary) {
+    html += `<div class="analysis-section"><h3>Γενική εκτίμηση</h3>
+      <div class="analysis-finding">
+        <div class="finding-dot" style="background:#4f8cff"></div>
+        <div>${data.summary}</div>
+      </div></div>`;
+  }
+
+  Object.entries(grouped).forEach(([type, items]) => {
+    const color = PATTERN_COLORS[type] || "#fff";
+    html += `<div class="analysis-section"><h3 style="color:${color}">${typeLabels[type] || type}</h3>`;
+    items.forEach(f => {
+      html += `<div class="analysis-finding">
+        <div class="finding-dot" style="background:${color}"></div>
+        <div>
+          <strong>${f.label}</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem; margin-left:0.4rem;">[${confidenceLabel[f.confidence] || f.confidence}]</span><br>
+          <span style="color:var(--text-dim)">${f.explanation}</span>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  if (findings.length === 0) {
+    html = `<div style="color:var(--text-dim)">Δεν εντοπίστηκαν σαφείς σχηματισμοί στην επιλεγμένη περιοχή.</div>`;
+  }
+
+  // Forecast section
+  if (data.forecast) {
+    const dirIcon = { up: "▲", down: "▼", sideways: "→" };
+    const dirColor = { up: "var(--green)", down: "var(--red)", sideways: "var(--amber)" };
+    const sym = currencySymbol();
+
+    const fcastRow = (label, f) => {
+      if (!f) return "";
+      const icon = dirIcon[f.direction] || "→";
+      const col = dirColor[f.direction] || "var(--text)";
+      const price = f.price ? `<strong style="color:${col}">${icon} ${sym}${formatNumber(f.price)}</strong>` : "";
+      return `<div class="analysis-finding">
+        <div class="finding-dot" style="background:${col}"></div>
+        <div><span style="color:var(--text-dim);font-size:0.8rem;">${label}</span>
+        ${price}<br>
+        <span style="color:var(--text-dim)">${f.note || ""}</span></div>
+      </div>`;
+    };
+
+    html += `<div class="analysis-section">
+      <h3 style="color:var(--accent)">Πρόβλεψη τιμής</h3>
+      ${fcastRow("24 ώρες", data.forecast.h24)}
+      ${fcastRow("1 εβδομάδα", data.forecast.w1)}
+      <div style="color:var(--text-dim);font-size:0.72rem;margin-top:0.4rem;">
+        ⚠ Η πρόβλεψη βασίζεται αποκλειστικά σε τεχνική ανάλυση και δεν αποτελεί επενδυτική συμβουλή.
+      </div>
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+
+  // Append Q&A chat interface
+  const chatDiv = document.createElement("div");
+  chatDiv.id = "chartChat";
+  chatDiv.innerHTML = `
+    <h3>💬 Ερωτήσεις για το διάγραμμα</h3>
+    <div id="chatMessages"></div>
+    <div id="chatInputRow">
+      <input type="text" id="chatInput" placeholder="π.χ. Πότε ήταν το τελευταίο σήμα αγοράς; Τι σημαίνει η γραμμή τάσης;" autocomplete="off">
+      <button id="chatSendBtn" class="primary">Αποστολή</button>
+    </div>
+  `;
+  panel.appendChild(chatDiv);
+
+  // Store OHLC context for the chat session
+  _chatOhlcSummary = ohlcSummaryForChat;
+  _chatCoinName = coinName;
+  _chatInterval = interval;
+  _chatHistory = []; // reset on new analysis
+
+  document.getElementById("chatSendBtn").addEventListener("click", sendChatMessage);
+  document.getElementById("chatInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChatMessage();
+  });
+
+  // Auto-save this analysis
+  saveAnalysis({
+    coinName, interval,
+    date: new Date().toISOString(),
+    findings: data.findings || [],
+    summary: data.summary || "",
+    forecast: data.forecast || null,
+    reportHtml: panel.innerHTML,
+    candles: analysisCandles,
+    tsByCandle,
+    ohlcSummaryForChat,
+    savedLines: JSON.parse(JSON.stringify(manualLines)) // deep-copy all lines (AI + user)
+  });
+
+  panel.classList.add("open");
+  panel.classList.remove("minimized");
+  document.getElementById("analysisPanelBar").style.display = "flex";
+  setMinimizeButtonState(false);
+}
+
+// Custom drag-range selection state for the analysis tool
+let analysisCustomRange = null; // { startIdx, endIdx } into _lastCandles
+let analysisDragState = null;   // { startX } pixel when dragging
+let yAxisDragState = null;      // { startPy, startMin, startMax } when dragging y-axis to rescale
+
+/* =====================================================
+   SAVED ANALYSES
+   ===================================================== */
+const SAVED_ANALYSES_KEY = "crypto_tracker_analyses_v1";
+const MAX_SAVED_ANALYSES = 20;
+
+function getSavedAnalyses() {
+  try { return JSON.parse(localStorage.getItem(SAVED_ANALYSES_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveAnalysis(entry) {
+  const list = getSavedAnalyses();
+  // Avoid duplicates within the same minute for the same coin+interval
+  const key = entry.coinName + "|" + entry.interval + "|" + entry.date.slice(0, 16);
+  const filtered = list.filter(e => (e.coinName + "|" + e.interval + "|" + e.date.slice(0, 16)) !== key);
+  filtered.unshift({ ...entry, id: Date.now() });
+  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  renderSavedAnalysesList();
+}
+
+function deleteAnalysis(id) {
+  const list = getSavedAnalyses().filter(e => e.id !== id);
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
+  renderSavedAnalysesList();
+}
+
+/* Manual, user-triggered save: captures the current chart state (lines +
+   candles + whatever AI report is showing, if any) under a custom name.
+   Unlike the automatic "session" saves, named saves are never overwritten
+   or auto-replaced — they persist until the user deletes them. */
+document.getElementById("manualSaveBtn").addEventListener("click", () => {
+  if (!currentModalCoinId || !_lastCandles.length) {
+    document.getElementById("analysisRangeHint").textContent = "Δεν υπάρχουν δεδομένα διαγράμματος για αποθήκευση.";
+    return;
+  }
+
+  const coinName = modalTitle.textContent.split(" —")[0].trim();
+  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const defaultName = `${coinName} ${new Date().toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" })}`;
+  const name = window.prompt("Όνομα αποθήκευσης:", defaultName);
+  if (name === null) return; // user cancelled
+
+  const panelHtml = $analysisPanel()?.classList.contains("open") ? $analysisPanel().innerHTML : "";
+
+  const entry = {
+    id: Date.now(),
+    isNamed: true,
+    name: name.trim() || defaultName,
+    coinName,
+    coinId: currentModalCoinId,
+    interval,
+    date: new Date().toISOString(),
+    savedLines: JSON.parse(JSON.stringify(manualLines)),
+    candles: _lastCandles,
+    tsByCandle: Object.fromEntries(_lastCandles.map(c => [c[0], c])),
+    findings: [],
+    reportHtml: panelHtml,
+    summary: "",
+    forecast: null,
+    ohlcSummaryForChat: _chatOhlcSummary || ""
+  };
+
+  const list = getSavedAnalyses();
+  list.unshift(entry);
+  if (list.length > MAX_SAVED_ANALYSES) list.length = MAX_SAVED_ANALYSES;
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
+  renderSavedAnalysesList();
+  document.getElementById("analysisRangeHint").textContent = `✓ Αποθηκεύτηκε ως «${entry.name}»`;
+});
+
+function renderSavedAnalysesList() {
+  const wrap = document.getElementById("savedAnalysesWrap");
+  const listEl = document.getElementById("savedAnalysesList");
+  if (!wrap || !listEl) return;
+
+  const list = getSavedAnalyses();
+  wrap.style.display = "block"; // always visible so the manual save button is reachable
+  listEl.innerHTML = "";
+
+  if (list.length === 0) {
+    listEl.innerHTML = `<span style="color:var(--text-dim); font-size:0.78rem;">Καμία αποθήκευση ακόμα.</span>`;
+    return;
+  }
+
+  list.forEach(entry => {
+    const date = new Date(entry.date).toLocaleString("el-GR", {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+    });
+    const tag = document.createElement("div");
+    const isSession = entry.isSession;
+    const isNamed = entry.isNamed;
+    const borderCol = isNamed ? "rgba(34,197,94,0.5)" : isSession ? "var(--border)" : "rgba(79,140,255,0.4)";
+    tag.style.cssText = `display:flex; align-items:center; gap:0.3rem; background:var(--panel-2); border:1px solid ${borderCol}; border-radius:8px; padding:0.25rem 0.5rem; font-size:0.78rem; cursor:pointer;`;
+    const badge = isNamed
+      ? `<span style="font-size:0.68rem;color:#22c55e;background:rgba(34,197,94,0.12);border-radius:4px;padding:0 4px;">★ saved</span>`
+      : isSession
+      ? `<span style="font-size:0.68rem;color:var(--text-dim);background:rgba(255,255,255,0.07);border-radius:4px;padding:0 4px;">session</span>`
+      : `<span style="font-size:0.68rem;color:#4f8cff;background:rgba(79,140,255,0.12);border-radius:4px;padding:0 4px;">AI</span>`;
+    const nameLabel = isNamed && entry.name ? `<span style="color:#22c55e;font-weight:600;">${entry.name}</span>` : "";
+    tag.innerHTML = `
+      ${badge}
+      ${nameLabel}
+      <span style="color:var(--accent);">${entry.coinName}</span>
+      <span style="color:var(--text-dim);">${entry.interval}</span>
+      <span style="color:var(--text-dim);">${date}</span>
+      <span class="del-saved" style="color:var(--text-dim); margin-left:0.2rem; cursor:pointer;" title="Διαγραφή">✕</span>
+    `;
+    tag.addEventListener("click", (e) => {
+      if (e.target.classList.contains("del-saved")) {
+        e.stopPropagation();
+        deleteAnalysis(entry.id);
+        return;
+      }
+      loadSavedAnalysis(entry);
+    });
+    listEl.appendChild(tag);
+  });
+}
+
+function loadSavedAnalysis(entry) {
+  // Make sure the modal is open for the right coin if possible
+  const panel = $analysisPanel();
+  const apikeyRow = $apikeyRow();
+  const rangeRow = document.getElementById("analysisRangeRow");
+
+  // Show analysis panel
+  panel.classList.add("open");
+  panel.classList.remove("minimized");
+  document.getElementById("analysisPanelBar").style.display = "flex";
+  setMinimizeButtonState(false);
+  apikeyRow.style.display = "none";
+  rangeRow.style.display = "flex";
+  document.getElementById("analyzeBtn").classList.add("active");
+
+  // Restore all lines (user-drawn + AI) from savedLines if available
+  manualLines = [];
+  hiddenPatternTypes.clear();
+
+  if (entry.savedLines && entry.savedLines.length > 0) {
+    // Restore directly — savedLines already has full p1/p2/type/color data
+    manualLines = entry.savedLines.map(l => ({ ...l, id: ++lineIdCounter }));
+    if (bigChart) bigChart.update();
+  } else if (entry.findings && entry.candles && entry.tsByCandle) {
+    // Fallback: reconstruct AI lines via shared helper
+    applyFindingsToChart(entry.findings, entry.tsByCandle, entry.candles);
+    if (bigChart) bigChart.update();
+  }
+
+  // Restore report HTML (empty for sessions/named saves without an AI report)
+  panel.innerHTML = entry.reportHtml ||
+    (entry.isSession
+      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">Session αποθηκευμένο — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
+      : entry.isNamed
+      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">«${entry.name}» — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
+      : "<div style='color:var(--text-dim)'>Αποθηκευμένη ανάλυση.</div>");
+
+  // Restore candles to _lastCandles so chart tools (regression, etc.) work
+  if ((entry.isSession || entry.isNamed) && entry.candles?.length) {
+    _lastCandles = entry.candles;
+  }
+
+  // Restore chat context
+  _chatOhlcSummary = entry.ohlcSummaryForChat || "";
+  _chatCoinName = entry.coinName || "";
+  _chatInterval = entry.interval || "";
+  _chatHistory = [];
+
+  const dateStr = new Date(entry.date).toLocaleString("el-GR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
+  $analysisHint().textContent =
+    `↩ Φορτώθηκε αποθηκευμένη ανάλυση (${entry.coinName} · ${entry.interval} · ${dateStr})`;
+}
+
+document.getElementById("clearSavedBtn")?.addEventListener("click", () => {
+  if (confirm("Διαγραφή όλων των αποθηκευμένων αναλύσεων;")) {
+    localStorage.removeItem(SAVED_ANALYSES_KEY);
+    renderSavedAnalysesList();
+  }
+});
+
+// Chart Q&A chat state
+let _chatOhlcSummary = "";
+let _chatCoinName = "";
+let _chatInterval = "";
+let _chatHistory = []; // { role, content }[] for multi-turn
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  const messages = document.getElementById("chatMessages");
+  const question = input.value.trim();
+  if (!question) return;
+
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    $analysisHint().textContent = "Χρειάζεται API key.";
+    return;
+  }
+
+  // Show user message
+  input.value = "";
+  const userBubble = document.createElement("div");
+  userBubble.className = "chat-msg user";
+  userBubble.textContent = question;
+  messages.appendChild(userBubble);
+
+  const thinkingBubble = document.createElement("div");
+  thinkingBubble.className = "chat-msg thinking";
+  thinkingBubble.textContent = "Αναλύω...";
+  messages.appendChild(thinkingBubble);
+  messages.scrollTop = messages.scrollHeight;
+
+  // Build system prompt with OHLC context
+  const systemPrompt = `Είσαι ειδικός τεχνικής ανάλυσης κρυπτονομισμάτων. Απαντάς σε ερωτήσεις για το διάγραμμα ${_chatCoinName} (interval: ${_chatInterval}).
+
+Τα OHLC δεδομένα που αναλύονται (timestamp_ms|ημ/ωρα|O|H|L|C):
+${_chatOhlcSummary}
+
+Απαντάς στα ελληνικά, συνοπτικά (2-4 προτάσεις), αναφέροντας συγκεκριμένες τιμές/ημερομηνίες από τα δεδομένα όταν είναι σχετικό. Δεν δίνεις επενδυτικές συμβουλές.`;
+
+  // Add to history
+  _chatHistory.push({ role: "user", content: question });
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: _chatHistory
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || "HTTP " + res.status);
+    }
+
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || "Δεν ήταν δυνατή η απάντηση.";
+
+    // Add assistant reply to history
+    _chatHistory.push({ role: "assistant", content: reply });
+
+    thinkingBubble.className = "chat-msg assistant";
+    thinkingBubble.textContent = reply;
+  } catch (err) {
+    thinkingBubble.className = "chat-msg assistant";
+    thinkingBubble.textContent = `Σφάλμα: ${err.message}`;
+    _chatHistory.pop(); // remove failed user message
+  }
+
+  messages.scrollTop = messages.scrollHeight;
+  input.focus();
+}
+
+document.getElementById("dataRangeSelect").addEventListener("change", (e) => {
+  const hint = $analysisHint();
+  if (e.target.value === "custom") {
+    hint.textContent = "Σύρε οριζόντια πάνω στο διάγραμμα για να ορίσεις την περιοχή δεδομένων.";
+    analysisCustomRange = null;
+  } else {
+    if (hint.textContent.includes("Σύρε") || hint.textContent.includes("Επιλέχθηκαν"))
+      hint.textContent = "";
+    document.getElementById("selectionOverlay").style.display = "none";
+    analysisCustomRange = null;
+  }
+});
+
+function setActiveTool(tool) {
+  activeTool = tool;
+  trendlinePoints = [];
+  channelOffset = null;
+  document.getElementById("trendlineBtn").classList.toggle("active", tool === "trend");
+  document.getElementById("channelBtn").classList.toggle("active", tool === "channel");
+  document.getElementById("hlineBtn").classList.toggle("active", tool === "hline");
+  document.getElementById("editLinesBtn").classList.toggle("active", tool === "edit");
+  document.getElementById("deleteLinesBtn").classList.toggle("active", tool === "delete");
+
+  // Disable pan/zoom while a drawing tool is active
+  if (bigChart?.options?.plugins?.zoom) {
+    bigChart.options.plugins.zoom.pan.enabled = (tool === null);
+    bigChart.options.plugins.zoom.zoom.wheel.enabled = true;
+    bigChart.update("none");
+  }
+
+  if (tool === "trend") {
+    modalHint.textContent = "Κάνε κλικ σε δύο σημεία για τη γραμμή τάσης.";
+    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+  } else if (tool === "channel") {
+    modalHint.textContent = "Κλικ 1: πρώτο άκρο της κεντρικής γραμμής.";
+    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+  } else if (tool === "hline") {
+    modalHint.textContent = "Κάνε κλικ σε ένα σημείο για να σχεδιάσεις οριζόντια γραμμή.";
+    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+  } else if (tool === "edit") {
+    modalHint.textContent = "Σύρε τα άκρα μιας γραμμής για να τη μετακινήσεις ή να την επεκτείνεις.";
+    bigChartCanvas.style.cursor = "default";
+  } else if (tool === "delete") {
+    modalHint.textContent = "Κάνε κλικ πάνω σε μία γραμμή για να τη διαγράψεις.";
+    bigChartCanvas.style.cursor = "pointer";
+  } else {
+    modalHint.textContent = "Scroll για zoom · σύρε για pan";
+    bigChartCanvas.style.cursor = "default";
+  }
+}
+
+function resetDrawings() {
+  hiddenPatternTypes.clear();
+  const filterRow = $patternFilterRow();
+  if (filterRow) filterRow.style.display = "none";
+  manualLines = [];
+  regressionLine = null;
+  trendlinePoints = [];
+  channelOffset = null;
+  activeTool = null;
+  dragState = null;
+  document.getElementById("trendlineBtn").classList.remove("active");
+  document.getElementById("channelBtn").classList.remove("active");
+  document.getElementById("hlineBtn").classList.remove("active");
+  document.getElementById("editLinesBtn").classList.remove("active");
+  document.getElementById("deleteLinesBtn").classList.remove("active");
+  modalHint.textContent = "";
+  regStatsEl.innerHTML = "";
+  refreshUserLineSelectionUI();
+}
+
+/* Build/refresh the checkbox list for user-drawn lines shown in the
+   analysis panel, so the user can choose which lines to include */
+function refreshUserLineSelectionUI() {
+  const row = $userLineRow();
+  const container = document.getElementById("userLineCheckboxes");
+  if (!row || !container) return;
+
+  const userLines = manualLines.filter(l => !l.aiGenerated);
+  if (userLines.length === 0) {
+    row.style.display = "none";
+    autoSaveSession(); // save even when all lines cleared
+    return;
+  }
+
+  // Only show if the analysis panel is open
+  const panel = $analysisPanel();
+  const rangeRow = document.getElementById("analysisRangeRow");
+  if (!panel?.classList.contains("open") && rangeRow?.style.display === "none") return;
+
+  row.style.display = "flex";
+  container.innerHTML = "";
+
+  const typeLabel = { trend: "Τάση", horizontal: "Οριζόντια", channel: "Κανάλι" };
+  const sym = currencySymbol();
+
+  userLines.forEach((line, idx) => {
+    const label = document.createElement("label");
+    label.style.cssText = "display:flex; align-items:center; gap:0.3rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:0.25rem 0.6rem; font-size:0.78rem; cursor:pointer; user-select:none;";
+
+    let desc = typeLabel[line.type] || line.type;
+    if (line.type === "horizontal") {
+      desc += ` ${sym}${formatNumber(line.p1.y)}`;
+    } else if (line.type === "trend" || line.type === "channel") {
+      const d1 = new Date(line.p1.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
+      const d2 = new Date(line.p2.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
+      desc += ` ${d1}→${d2}`;
+    }
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = line.includeInAnalysis !== false; // default: included
+    cb.dataset.lineId = line.id;
+    cb.addEventListener("change", () => {
+      const l = manualLines.find(x => x.id === line.id);
+      if (l) l.includeInAnalysis = cb.checked;
+      // Update hint count
+      const count = manualLines.filter(x => !x.aiGenerated && x.includeInAnalysis !== false).length;
+      const hint = $userLinesHint();
+      if (hint) hint.textContent = count > 0 ? `📐 ${count} γραμμές θα συμπεριληφθούν` : "";
+    });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(desc));
+    container.appendChild(label);
+  });
+
+  // Buttons
+  document.getElementById("selectAllLinesBtn").onclick = () => {
+    container.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.checked = true;
+      const l = manualLines.find(x => x.id === +cb.dataset.lineId);
+      if (l) l.includeInAnalysis = true;
+    });
+    const hint = $userLinesHint();
+    if (hint) hint.textContent = `📐 ${userLines.length} γραμμές θα συμπεριληφθούν`;
+  };
+  document.getElementById("selectNoneLinesBtn").onclick = () => {
+    container.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.checked = false;
+      const l = manualLines.find(x => x.id === +cb.dataset.lineId);
+      if (l) l.includeInAnalysis = false;
+    });
+    const hint = $userLinesHint();
+    if (hint) hint.textContent = "";
+  };
+}
+
+/* ---------- Manual lines: drawing + interaction ---------- */
+
+// Plugin: draws manual trend/horizontal lines and the regression line,
+// extended to the chart's plot area edges, with draggable endpoint handles
+// while edit mode is active.
+const manualLinesPlugin = {
+  id: "manualLinesRenderer",
+  afterDatasetsDraw(chart) {
+    if (chart !== bigChart) return;
+    const { ctx, chartArea, scales } = chart;
+    const xScale = scales.x;
+    const yScale = scales.y;
+
+    function drawExtendedLine(p1, p2, color, dashed) {
+      // Extend the line defined by p1->p2 (data coords) to the full plot width
+      const x1px = xScale.getPixelForValue(p1.x);
+      const y1px = yScale.getPixelForValue(p1.y);
+      const x2px = xScale.getPixelForValue(p2.x);
+      const y2px = yScale.getPixelForValue(p2.y);
+
+      let leftPt, rightPt;
+      if (Math.abs(x2px - x1px) < 0.001) {
+        // vertical line — just draw between the two points extended vertically
+        leftPt = { x: x1px, y: chartArea.top };
+        rightPt = { x: x1px, y: chartArea.bottom };
+      } else {
+        const slope = (y2px - y1px) / (x2px - x1px);
+        const yAtLeft = y1px + slope * (chartArea.left - x1px);
+        const yAtRight = y1px + slope * (chartArea.right - x1px);
+        leftPt = { x: chartArea.left, y: yAtLeft };
+        rightPt = { x: chartArea.right, y: yAtRight };
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+      ctx.clip();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      if (dashed) ctx.setLineDash(dashed);
+      ctx.beginPath();
+      ctx.moveTo(leftPt.x, leftPt.y);
+      ctx.lineTo(rightPt.x, rightPt.y);
+      ctx.stroke();
+      ctx.restore();
+
+      return { x1px, y1px, x2px, y2px };
+    }
+
+    function drawHandle(xpx, ypx, color) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#0f1115";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(xpx, ypx, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPriceLabel(ypx, price, color) {
+      const text = currencySymbol() + formatNumber(price);
+      ctx.save();
+      ctx.font = "12px sans-serif";
+      const padding = 4;
+      const textWidth = ctx.measureText(text).width;
+      const boxWidth = textWidth + padding * 2;
+      const boxHeight = 18;
+      let boxY = ypx - boxHeight / 2;
+      // keep the label within the plot area vertically
+      boxY = Math.max(chartArea.top, Math.min(chartArea.bottom - boxHeight, boxY));
+      const boxX = chartArea.left;
+
+      ctx.fillStyle = color;
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      ctx.fillStyle = "#0f1115";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, boxX + boxWidth / 2, boxY + boxHeight / 2);
+      ctx.restore();
+    }
+
+    manualLines.forEach(line => {
+      // Skip AI-generated lines whose type is hidden by the filter
+      if (line.aiGenerated && line.aiPatternType && hiddenPatternTypes.has(line.aiPatternType)) return;
+      if (line.type === "channel") {
+        const color = "#f59e0b"; // amber for channels
+        // Central line
+        const px = drawExtendedLine(line.p1, line.p2, color, null);
+        // Parallel line (offset both points by the same y-delta)
+        const p1b = { x: line.p1.x, y: line.p1.y + line.offset };
+        const p2b = { x: line.p2.x, y: line.p2.y + line.offset };
+        drawExtendedLine(p1b, p2b, color, [4, 3]);
+
+        // Filled area between the two lines (clipped to chart area)
+        const x1px = xScale.getPixelForValue(line.p1.x);
+        const y1aPx = yScale.getPixelForValue(line.p1.y);
+        const y1bPx = yScale.getPixelForValue(line.p1.y + line.offset);
+        const x2px = xScale.getPixelForValue(line.p2.x);
+        const y2aPx = yScale.getPixelForValue(line.p2.y);
+        const y2bPx = yScale.getPixelForValue(line.p2.y + line.offset);
+
+        // Extend fill to chart edges using the same slope
+        const slope = (x2px - x1px) !== 0 ? (y2aPx - y1aPx) / (x2px - x1px) : 0;
+        const slopeB = (x2px - x1px) !== 0 ? (y2bPx - y1bPx) / (x2px - x1px) : 0;
+        const yALeft = y1aPx + slope * (chartArea.left - x1px);
+        const yARight = y1aPx + slope * (chartArea.right - x1px);
+        const yBLeft = y1bPx + slopeB * (chartArea.left - x1px);
+        const yBRight = y1bPx + slopeB * (chartArea.right - x1px);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yALeft);
+        ctx.lineTo(chartArea.right, yARight);
+        ctx.lineTo(chartArea.right, yBRight);
+        ctx.lineTo(chartArea.left, yBLeft);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(245,158,11,0.07)";
+        ctx.fill();
+        ctx.restore();
+
+        // Edit handles on both endpoints of both lines
+        if (activeTool === "edit") {
+          drawHandle(x1px, y1aPx, color);
+          drawHandle(x2px, y2aPx, color);
+          drawHandle(xScale.getPixelForValue(p1b.x), yScale.getPixelForValue(p1b.y), color);
+          drawHandle(xScale.getPixelForValue(p2b.x), yScale.getPixelForValue(p2b.y), color);
+        }
+      } else {
+        const color = line.aiColor || (line.type === "horizontal" ? "#a78bfa" : "#ffb454");
+        const px = drawExtendedLine(line.p1, line.p2, color, line.aiGenerated ? [6,3] : null);
+        if (activeTool === "edit") {
+          drawHandle(px.x1px, px.y1px, color);
+          drawHandle(px.x2px, px.y2px, color);
+        }
+        if (line.type === "horizontal") {
+          drawPriceLabel(px.y1px, line.p1.y, color);
+        }
+      }
+    });
+
+    if (regressionLine) {
+      drawExtendedLine(regressionLine.points[0], regressionLine.points[1], "#4f8cff", [6, 4]);
+    }
+  }
+};
+
+// Plugin: draws the current (last close) price as a dashed horizontal line
+// with a price label, coloured green (upward) or red (downward) based on
+// whether the last candle closed higher or lower than the one before it.
+const currentPricePlugin = {
+  id: "currentPricePlugin",
+  afterDatasetsDraw(chart) {
+    if (chart !== bigChart) return;
+    const ds = chart.data.datasets.find(d => d.candleData);
+    if (!ds || !ds.data || ds.data.length < 2) return;
+
+    const last = ds.data[ds.data.length - 1];
+    const prev = ds.data[ds.data.length - 2];
+    if (!last || !prev) return;
+
+    const price = last.c;
+    const isUp = price >= prev.c;
+    const color = isUp ? "#3ddc97" : "#ff5c6c";
+
+    const { ctx, chartArea, scales } = chart;
+    const yPx = scales.y.getPixelForValue(price);
+
+    // Dashed line across full chart width
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, yPx);
+    ctx.lineTo(chartArea.right, yPx);
+    ctx.stroke();
+    ctx.restore();
+
+    // Price label badge on the right
+    const text = currencySymbol() + formatNumber(price);
+    ctx.save();
+    ctx.font = "bold 12px sans-serif";
+    const padding = 5;
+    const textWidth = ctx.measureText(text).width;
+    const boxW = textWidth + padding * 2;
+    const boxH = 20;
+    let boxY = yPx - boxH / 2;
+    boxY = Math.max(chartArea.top, Math.min(chartArea.bottom - boxH, boxY));
+    const boxX = chartArea.left;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(boxX, boxY, boxW, boxH, 3);
+    } else {
+      ctx.rect(boxX, boxY, boxW, boxH);
+    }
+    ctx.fill();
+    ctx.fillStyle = "#0f1115";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, boxX + boxW / 2, boxY + boxH / 2);
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") {
+  Chart.register(manualLinesPlugin);
+  Chart.register(currentPricePlugin);
+}
+
+function dataCoordsFromEvent(evt) {
+  const canvasPosition = Chart.helpers.getRelativePosition(evt, bigChart);
+  return {
+    x: bigChart.scales.x.getValueForPixel(canvasPosition.x),
+    y: bigChart.scales.y.getValueForPixel(canvasPosition.y),
+    px: canvasPosition.x,
+    py: canvasPosition.y
+  };
+}
+
+function pixelDistance(px1, py1, px2, py2) {
+  return Math.hypot(px1 - px2, py1 - py2);
+}
+
+bigChartCanvas.addEventListener("click", (evt) => {
+  if (!bigChart) return;
+
+  if (activeTool === "delete") {
+    const { px, py } = dataCoordsFromEvent(evt);
+    const DELETE_HIT_PX = 8;
+
+    // Hit-test: find the closest line to the click point
+    let closestLine = null;
+    let closestDist = DELETE_HIT_PX;
+
+    manualLines.forEach(line => {
+      const x1 = bigChart.scales.x.getPixelForValue(line.p1.x);
+      const y1 = bigChart.scales.y.getPixelForValue(line.p1.y);
+      const x2 = bigChart.scales.x.getPixelForValue(line.p2.x);
+      const y2 = bigChart.scales.y.getPixelForValue(line.p2.y);
+
+      // Extend to chart bounds like the drawing plugin does
+      const { chartArea } = bigChart;
+      let ex1, ey1, ex2, ey2;
+      if (Math.abs(x2 - x1) < 0.001) {
+        ex1 = x1; ey1 = chartArea.top;
+        ex2 = x1; ey2 = chartArea.bottom;
+      } else {
+        const slope = (y2 - y1) / (x2 - x1);
+        ex1 = chartArea.left;  ey1 = y1 + slope * (chartArea.left - x1);
+        ex2 = chartArea.right; ey2 = y1 + slope * (chartArea.right - x1);
+      }
+
+      // Distance from point to line segment
+      const dx = ex2 - ex1, dy = ey2 - ey1;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq > 0 ? ((px - ex1) * dx + (py - ey1) * dy) / lenSq : 0;
+      t = Math.max(0, Math.min(1, t));
+      const nearX = ex1 + t * dx;
+      const nearY = ey1 + t * dy;
+      const dist = Math.hypot(px - nearX, py - nearY);
+
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestLine = line;
+      }
+    });
+
+    if (closestLine) {
+      manualLines = manualLines.filter(l => l.id !== closestLine.id);
+      bigChart.update();
+      autoSaveSession();
+      modalHint.textContent = "Γραμμή διαγράφηκε. Κάνε κλικ σε άλλη γραμμή για διαγραφή.";
+      refreshUserLineSelectionUI();
+    } else {
+      modalHint.textContent = "Δεν βρέθηκε γραμμή κοντά στο σημείο. Δοκίμασε πιο κοντά.";
+    }
+    return;
+  }
+
+  if (activeTool === "trend") {
+    const { x, y } = dataCoordsFromEvent(evt);
+    trendlinePoints.push({ x, y });
+    if (trendlinePoints.length === 2) {
+      manualLines.push({
+        id: ++lineIdCounter,
+        type: "trend",
+        p1: trendlinePoints[0],
+        p2: trendlinePoints[1]
+      });
+      trendlinePoints = [];
+      setActiveTool(null);
+      modalHint.textContent = "Η γραμμή τάσης προστέθηκε. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.";
+      bigChart.update();
+      refreshUserLineSelectionUI();
+    } else {
+      modalHint.textContent = "Επίλεξε το δεύτερο σημείο της γραμμής τάσης.";
+    }
+  } else if (activeTool === "channel") {
+    const { x, y } = dataCoordsFromEvent(evt);
+    trendlinePoints.push({ x, y });
+    if (trendlinePoints.length === 1) {
+      modalHint.textContent = "Κλικ 2: δεύτερο άκρο της κεντρικής γραμμής.";
+    } else if (trendlinePoints.length === 2) {
+      modalHint.textContent = "Κλικ 3: σημείο στο οποίο θα περνά η παράλληλη γραμμή (για να ορίσεις το πλάτος του καναλιού).";
+    } else if (trendlinePoints.length === 3) {
+      const [p1, p2, p3] = trendlinePoints;
+      const t = (p2.x - p1.x) !== 0 ? (p3.x - p1.x) / (p2.x - p1.x) : 0;
+      const yOnLine = p1.y + t * (p2.y - p1.y);
+      const offset = p3.y - yOnLine;
+      manualLines.push({
+        id: ++lineIdCounter,
+        type: "channel",
+        p1, p2,
+        offset
+      });
+      trendlinePoints = [];
+      channelOffset = null;
+      setActiveTool(null);
+      modalHint.textContent = "Το κανάλι τάσης προστέθηκε. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να το προσαρμόσεις.";
+      bigChart.update();
+      refreshUserLineSelectionUI();
+    }
+  } else if (activeTool === "hline") {
+    const { x, y } = dataCoordsFromEvent(evt);
+    const xMin = bigChart.scales.x.min;
+    const xMax = bigChart.scales.x.max;
+    manualLines.push({
+      id: ++lineIdCounter,
+      type: "horizontal",
+      p1: { x: xMin, y },
+      p2: { x: xMax, y }
+    });
+    setActiveTool(null);
+    modalHint.textContent = `Η οριζόντια γραμμή προστέθηκε στο ${currencySymbol()}${formatNumber(y)}. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.`;
+    bigChart.update();
+    refreshUserLineSelectionUI();
+  }
+});
+
+bigChartCanvas.addEventListener("mousedown", (evt) => {
+  if (!bigChart) return;
+
+  // Vertical scale drag: mousedown over the y-axis label area (left of
+  // chartArea) rescales the price axis, independent of drawing tools.
+  const posForAxis = Chart.helpers.getRelativePosition(evt, bigChart);
+  if (activeTool === null && !analysisDragState
+      && posForAxis.x < bigChart.chartArea.left
+      && posForAxis.y >= bigChart.chartArea.top && posForAxis.y <= bigChart.chartArea.bottom) {
+    const yScale = bigChart.scales.y;
+    yAxisDragState = {
+      startPy: posForAxis.y,
+      startMin: yScale.min,
+      startMax: yScale.max
+    };
+    bigChartCanvas.style.cursor = "ns-resize";
+    return;
+  }
+
+  // Analysis custom range drag mode
+  if (document.getElementById("dataRangeSelect")?.value === "custom"
+      && $analysisPanel()?.classList.contains("open")
+      && activeTool === null) {
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    analysisDragState = { startX: pos.x };
+    analysisCustomRange = null;
+    bigChartCanvas.style.cursor = "col-resize";
+    return;
+  }
+
+  if (activeTool !== "edit") return;
+  const { px, py } = dataCoordsFromEvent(evt);
+
+  for (const line of manualLines) {
+    const x1px = bigChart.scales.x.getPixelForValue(line.p1.x);
+    const y1px = bigChart.scales.y.getPixelForValue(line.p1.y);
+    const x2px = bigChart.scales.x.getPixelForValue(line.p2.x);
+    const y2px = bigChart.scales.y.getPixelForValue(line.p2.y);
+
+    if (pixelDistance(px, py, x1px, y1px) <= HIT_RADIUS_PX) {
+      dragState = { lineId: line.id, endpoint: "p1" };
+      bigChartCanvas.style.cursor = "grabbing";
+      return;
+    }
+    if (pixelDistance(px, py, x2px, y2px) <= HIT_RADIUS_PX) {
+      dragState = { lineId: line.id, endpoint: "p2" };
+      bigChartCanvas.style.cursor = "grabbing";
+      return;
+    }
+
+    // Channel: also check the two offset handles
+    if (line.type === "channel") {
+      const x1bPx = bigChart.scales.x.getPixelForValue(line.p1.x);
+      const y1bPx = bigChart.scales.y.getPixelForValue(line.p1.y + line.offset);
+      const x2bPx = bigChart.scales.x.getPixelForValue(line.p2.x);
+      const y2bPx = bigChart.scales.y.getPixelForValue(line.p2.y + line.offset);
+      if (pixelDistance(px, py, x1bPx, y1bPx) <= HIT_RADIUS_PX) {
+        dragState = { lineId: line.id, endpoint: "p1b" };
+        bigChartCanvas.style.cursor = "grabbing";
+        return;
+      }
+      if (pixelDistance(px, py, x2bPx, y2bPx) <= HIT_RADIUS_PX) {
+        dragState = { lineId: line.id, endpoint: "p2b" };
+        bigChartCanvas.style.cursor = "grabbing";
+        return;
+      }
+    }
+  }
+});
+
+bigChartCanvas.addEventListener("mousemove", (evt) => {
+  if (!bigChart) return;
+
+  // Vertical scale drag: rescale the price axis around its center
+  if (yAxisDragState) {
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    const deltaPy = pos.y - yAxisDragState.startPy;
+    // Dragging down (positive delta) zooms out, dragging up zooms in
+    const scaleFactor = Math.exp(deltaPy * 0.005);
+    const center = (yAxisDragState.startMin + yAxisDragState.startMax) / 2;
+    const halfRange = ((yAxisDragState.startMax - yAxisDragState.startMin) / 2) * scaleFactor;
+    bigChart.options.scales.y.min = center - halfRange;
+    bigChart.options.scales.y.max = center + halfRange;
+    bigChart.update("none");
+    return;
+  }
+
+  // Analysis range drag overlay
+  if (analysisDragState) {
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    const { chartArea } = bigChart;
+    const x1 = Math.max(chartArea.left, Math.min(analysisDragState.startX, pos.x));
+    const x2 = Math.min(chartArea.right, Math.max(analysisDragState.startX, pos.x));
+    const overlay = document.getElementById("selectionOverlay");
+    overlay.style.display = "block";
+    overlay.style.left  = x1 + "px";
+    overlay.style.width = (x2 - x1) + "px";
+    overlay.style.top    = chartArea.top + "px";
+    overlay.style.bottom = (bigChartCanvas.offsetHeight - chartArea.bottom) + "px";
+    return;
+  }
+
+  // Cursor hint when hovering over the y-axis label area (rescale handle)
+  if (activeTool === null && !dragState && !analysisDragState) {
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    if (pos.x < bigChart.chartArea.left && pos.y >= bigChart.chartArea.top && pos.y <= bigChart.chartArea.bottom) {
+      bigChartCanvas.style.cursor = "ns-resize";
+    }
+  }
+
+  if (dragState) {
+    const { x, y } = dataCoordsFromEvent(evt);
+    const line = manualLines.find(l => l.id === dragState.lineId);
+    if (line) {
+      if (line.type === "horizontal") {
+        // Keep both endpoints at the same y; preserve full-width x span
+        line.p1.y = y;
+        line.p2.y = y;
+        modalHint.textContent = `Οριζόντια γραμμή: ${currencySymbol()}${formatNumber(y)}`;
+      } else if (line.type === "channel" && (dragState.endpoint === "p1b" || dragState.endpoint === "p2b")) {
+        // Dragging the parallel line — update the channel offset
+        const ep = dragState.endpoint === "p1b" ? "p1" : "p2";
+        const yOnMainLine = line[ep].y;
+        line.offset = y - yOnMainLine;
+      } else {
+        line[dragState.endpoint] = { x, y };
+      }
+      bigChart.update();
+    }
+    return;
+  }
+
+  // Hover feedback in edit mode
+  if (activeTool === "edit") {
+    const { px, py } = dataCoordsFromEvent(evt);
+    let overHandle = false;
+    for (const line of manualLines) {
+      const x1px = bigChart.scales.x.getPixelForValue(line.p1.x);
+      const y1px = bigChart.scales.y.getPixelForValue(line.p1.y);
+      const x2px = bigChart.scales.x.getPixelForValue(line.p2.x);
+      const y2px = bigChart.scales.y.getPixelForValue(line.p2.y);
+      if (pixelDistance(px, py, x1px, y1px) <= HIT_RADIUS_PX || pixelDistance(px, py, x2px, y2px) <= HIT_RADIUS_PX) {
+        overHandle = true;
+        break;
+      }
+    }
+    bigChartCanvas.style.cursor = overHandle ? "grab" : "default";
+  }
+});
+
+window.addEventListener("mouseup", (evt) => {
+  // Commit y-axis rescale drag
+  if (yAxisDragState) {
+    yAxisDragState = null;
+    bigChartCanvas.style.cursor = "default";
+    return;
+  }
+
+  // Commit analysis range drag
+  if (analysisDragState && bigChart) {
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    const xA = Math.min(analysisDragState.startX, pos.x);
+    const xB = Math.max(analysisDragState.startX, pos.x);
+    analysisDragState = null;
+    bigChartCanvas.style.cursor = "default";
+
+    // Convert pixel positions to timestamp values, then find candle indexes
+    const tA = bigChart.scales.x.getValueForPixel(xA);
+    const tB = bigChart.scales.x.getValueForPixel(xB);
+    const candles = _lastCandles;
+    if (candles && candles.length > 1 && Math.abs(xB - xA) > 5) {
+      const startIdx = Math.max(0, candles.findIndex(c => c[0] >= tA));
+      let endIdx = candles.length - 1;
+      for (let i = candles.length - 1; i >= 0; i--) {
+        if (candles[i][0] <= tB) { endIdx = i; break; }
+      }
+      if (endIdx > startIdx) {
+        analysisCustomRange = { startIdx, endIdx };
+        const count = endIdx - startIdx + 1;
+        const fmtOpts = currentInterval === "1m" || currentInterval === "5m" || currentInterval === "1h"
+          ? { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }
+          : { day:"2-digit", month:"long", year:"numeric" };
+        const dateA = new Date(candles[startIdx][0]).toLocaleDateString("el-GR", fmtOpts);
+        const dateB = new Date(candles[endIdx][0]).toLocaleDateString("el-GR", fmtOpts);
+        $analysisHint().textContent =
+          `✓ Επιλογή: ${dateA} – ${dateB}`;
+        bigChart.update();
+      }
+    }
+    return;
+  }
+
+  if (dragState) {
+    dragState = null;
+    bigChartCanvas.style.cursor = "default";
+    autoSaveSession();
+    if (activeTool === "edit") {
+      modalHint.textContent = "Σύρε τα άκρα μιας γραμμής για να τη μετακινήσεις ή να την επεκτείνεις.";
+    }
+  }
+});
+
+function openChartModal(coinId, name, symbol) {
+  currentModalCoinId = coinId;
+  currentModalSymbol = symbol;
+
+  const krakenEurSymbol = KRAKEN_EUR_MAP[coinId];
+  if (currency === "eur" && krakenEurSymbol) {
+    dataSource = "kraken";
+  } else if (BINANCE_SYMBOL_MAP[coinId]) {
+    dataSource = "binance";
+  } else {
+    dataSource = "coingecko";
+  }
+
+  const sourceLabel = dataSource === "kraken" ? "Kraken, EUR"
+    : dataSource === "binance" ? "Binance"
+    : "CoinGecko";
+  modalTitle.textContent = `${name} (${symbol.toUpperCase()}) — Candlestick (${sourceLabel})`;
+
+  resetDrawings();
+  document.querySelectorAll("#timeframeToggle button").forEach(b => b.classList.remove("active"));
+  document.querySelector('#timeframeToggle button[data-interval="1m"]').classList.add("active");
+  currentInterval = "1m";
+  currentLimit = 60;
+  chartModal.classList.add("open");
+  loadModalChart();
+}
+
+function closeChartModal() {
+  chartModal.classList.remove("open");
+  if (bigChart) {
+    bigChart.destroy();
+    bigChart = null;
+  }
+  analysisCustomRange = null;
+  analysisDragState = null;
+  document.getElementById("selectionOverlay").style.display = "none";
+  $analysisPanel().classList.remove("open");
+  $analysisPanel().classList.remove("minimized");
+  $analysisPanel().innerHTML = "";
+  document.getElementById("analysisPanelBar").style.display = "none";
+  $apikeyRow().style.display = "none";
+  document.getElementById("analysisRangeRow").style.display = "none";
+  document.getElementById("analyzeBtn").classList.remove("active");
+}
+
+/* Fetch candle data from the best available source:
+   - Kraken (EUR pairs) when currency=EUR and a Kraken EUR pair exists
+   - Binance (USDT pairs) otherwise, if available
+   - CoinGecko as a last-resort fallback */
+async function loadModalChart() {
+  if (!currentModalCoinId) return;
+  bigChartCanvas.style.opacity = "0.4";
+  modalHint.textContent = "";
+  try {
+    let candles; // array of [timestamp, open, high, low, close]
+
+    if (dataSource === "kraken") {
+      const krakenSymbol = KRAKEN_EUR_MAP[currentModalCoinId];
+      // Compute how far back in seconds we need to go, then use Kraken's
+      // `since` parameter so we always get the correct time window regardless
+      // of how many candles that produces.
+      const intervalMs = {
+        "1m": 60e3, "5m": 5*60e3, "1h": 3600e3, "4h": 4*3600e3, "1d": 86400e3
+      }[currentInterval] || 3600e3;
+      // Kraken max 720 candles/request. For windows > 720 candles, use a
+      // coarser but supported interval: 4h (240min) covers up to 120 days,
+      // 1d covers up to 720 days. Pick the finest interval that fits in 720.
+      let effectiveInterval = currentInterval;
+      const windowMs = intervalMs * currentLimit;
+      if (windowMs > 720 * intervalMs) {
+        // Need more than 720 candles — use next coarser interval
+        if (currentInterval === "4h") effectiveInterval = "1d";
+      }
+      const krakenInterval = KRAKEN_INTERVAL_MAP[effectiveInterval] || 60;
+      // `since` in Unix seconds = start of desired window
+      const sinceMs = Date.now() - (currentLimit * intervalMs);
+      const sinceSec = Math.floor(sinceMs / 1000);
+      const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}&since=${sinceSec}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (data.error && data.error.length > 0) throw new Error(data.error.join(", "));
+      const resultKey = Object.keys(data.result).find(k => k !== "last");
+      const rows = data.result[resultKey] || [];
+      candles = rows.map(r => [r[0] * 1000, parseFloat(r[1]), parseFloat(r[2]), parseFloat(r[3]), parseFloat(r[4]), parseFloat(r[6])]);
+    } else if (dataSource === "binance") {
+      const symbol = BINANCE_SYMBOL_MAP[currentModalCoinId];
+      // Binance limit max is 1000. For larger ranges, use startTime instead.
+      const intervalMs = {
+        "1m": 60e3, "5m": 5*60e3, "1h": 3600e3, "4h": 4*3600e3, "1d": 86400e3
+      }[currentInterval] || 3600e3;
+      let url;
+      if (currentLimit <= 1000) {
+        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&limit=${currentLimit}`;
+      } else {
+        const startTime = Date.now() - intervalMs * currentLimit;
+        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&startTime=${startTime}&limit=1000`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      candles = data.map(k => [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4]), parseFloat(k[5])]);
+      if (currency === "eur") {
+        modalHint.textContent = "Δεδομένα Binance σε USDT (≈ USD) — δεν υπάρχει ζεύγος EUR για αυτό το νόμισμα στο Kraken.";
+      }
+    } else {
+      candles = await loadCoinGeckoFallback();
+      modalHint.textContent = "Δεδομένα CoinGecko.";
+    }
+
+    renderBigChart(candles);
+  } catch (err) {
+    console.error(err);
+    modalHint.textContent = "Σφάλμα φόρτωσης δεδομένων διαγράμματος.";
+  } finally {
+    bigChartCanvas.style.opacity = "1";
+  }
+}
+
+/* CoinGecko-based fallback, mirroring the original timeframe logic */
+async function loadCoinGeckoFallback() {
+  let candles;
+  const H = 60 * 60 * 1000;
+  if (currentInterval === "1m") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const oneHourAgo = Date.now() - H;
+    const recent = data.prices.filter(p => p[0] >= oneHourAgo);
+    candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-12), 5 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "5m") {
+    // 24h with 5-min candles: market_chart days=1 gives ~5-min points
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 5 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "1h" && currentLimit <= 168) {
+    // 7-day hourly: market_chart with days=7 gives hourly points
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
+  } else if (currentInterval === "1h") {
+    // 30-day hourly: market_chart with days=30 gives hourly points
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=30`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
+  } else if (currentInterval === "4h") {
+    // 6-month, 4h candles: build from daily market_chart (free API limit)
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=180&interval=daily`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 4 * H, data.total_volumes);
+  } else {
+    // 1-year daily
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 24 * H, data.total_volumes);
+  }
+  return candles;
+}
+
+/* Build pseudo-candles from a price series (used for CoinGecko fallback).
+   volumes: optional [[ts, vol], ...] array from CoinGecko market_chart */
+function buildCandlesFromPrices(prices, bucketMs, volumes) {
+  if (prices.length === 0) return [];
+
+  // Build volume lookup by bucket
+  const volByBucket = {};
+  if (volumes) {
+    volumes.forEach(([ts, vol]) => {
+      const key = Math.floor(ts / bucketMs) * bucketMs;
+      volByBucket[key] = (volByBucket[key] || 0) + vol;
+    });
+  }
+
+  const buckets = {};
+  prices.forEach(([ts, price]) => {
+    const bucketKey = Math.floor(ts / bucketMs) * bucketMs;
+    if (!buckets[bucketKey]) buckets[bucketKey] = [];
+    buckets[bucketKey].push(price);
+  });
+  return Object.keys(buckets).sort((a, b) => a - b).map(key => {
+    const vals = buckets[key];
+    return [
+      Number(key),
+      vals[0],
+      Math.max(...vals),
+      Math.min(...vals),
+      vals[vals.length - 1],
+      volByBucket[key] || 0
+    ];
+  });
+}
+
+/* Render Chart.js financial candlestick chart with optional overlay lines */
+function renderBigChart(candles) {
+  const ohlcData = candles.map(c => ({
+    x: c[0], o: c[1], h: c[2], l: c[3], c: c[4], v: c[5] || 0
+  }));
+
+  if (bigChart) {
+    bigChart.destroy();
+    bigChart = null;
+  }
+
+  const datasets = [{
+    label: "Τιμή (O/H/L/C)",
+    data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c })),
+    candleData: true,
+    upColor: "#3ddc97",
+    downColor: "#ff5c6c",
+    type: "line",
+    borderWidth: 0,
+    pointRadius: 0,
+    showLine: false,
+    fill: false
+  }];
+
+  // Hidden helper datasets so Chart.js's auto y-scale accounts for wicks
+  const highs = ohlcData.map(d => ({ x: d.x, y: d.h }));
+  const lows = ohlcData.map(d => ({ x: d.x, y: d.l }));
+  datasets.push({
+    label: "_high_range",
+    data: highs, type: "line", borderWidth: 0, pointRadius: 0,
+    showLine: false, hidden: false, legend: false, fill: false, yAxisID: "y"
+  });
+  datasets.push({
+    label: "_low_range",
+    data: lows, type: "line", borderWidth: 0, pointRadius: 0,
+    showLine: false, hidden: false, legend: false, fill: false, yAxisID: "y"
+  });
+
+  // Volume bars on a secondary y-axis (right side, max = 4× so bars stay
+  // in the bottom ~25% of the chart and don't obscure candlesticks)
+  const hasVolume = candles.some(c => c[5] > 0);
+  if (hasVolume) {
+    datasets.push({
+      label: "Όγκος",
+      type: "bar",
+      data: ohlcData.map(d => ({
+        x: d.x,
+        y: d.v || 0
+      })),
+      backgroundColor: ohlcData.map(d => d.c >= d.o
+        ? "rgba(61,220,151,0.35)"
+        : "rgba(255,92,108,0.35)"),
+      borderColor: ohlcData.map(d => d.c >= d.o
+        ? "rgba(61,220,151,0.6)"
+        : "rgba(255,92,108,0.6)"),
+      borderWidth: 0,
+      yAxisID: "yVol",
+      barPercentage: 0.8,
+      categoryPercentage: 1.0,
+      order: 10 // draw behind candles
+    });
+  }
+
+  // Manual lines and regression line are drawn by a custom plugin (so they
+  // can extend to the chart edges and expose draggable endpoint handles),
+  // not as Chart.js datasets.
+
+  // X-axis padding: leave room after the most recent candle so it doesn't
+  // sit glued to the right edge.
+  let xMax;
+  if (ohlcData.length > 1) {
+    const last = ohlcData[ohlcData.length - 1].x;
+    const prev = ohlcData[ohlcData.length - 2].x;
+    const step = last - prev;
+    xMax = last + step * 4; // ~4 extra bars of breathing room
+  }
+
+  const timeUnit = (currentInterval === "1m" || currentInterval === "5m") ? "minute"
+    : (currentInterval === "1h" && currentLimit <= 168) ? "hour"  // 7ημ → ώρα
+    : (currentInterval === "1h" && currentLimit > 168) ? "day"   // 30ημ → ημέρα
+    : currentInterval === "4h" ? "day"                            // 6μ → ημέρα
+    : "day";                                                      // 1έτος → ημέρα
+
+  // Display formats: date + time only, no day name
+  const timeDisplayFormats = {
+    minute: "dd/MM HH:mm",
+    hour:   "dd/MM HH:mm",
+    day:    "dd/MM/yy",
+    week:   "dd/MM/yy",
+    month:  "MM/yy"
+  };
+
+  bigChart = new Chart(bigChartCanvas, {
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", axis: "x", intersect: false },
+      scales: {
+        x: {
+          type: "time",
+          time: { unit: timeUnit, displayFormats: timeDisplayFormats },
+          adapters: { date: { locale: "el" } },
+          ticks: { color: "#9aa1ac", maxRotation: 30, minRotation: 0 },
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ...(xMax !== undefined ? { max: xMax } : {})
+        },
+        y: {
+          ticks: {
+            color: "#9aa1ac",
+            callback: (val) => currencySymbol() + formatCompact(val)
+          },
+          grid: { color: "rgba(255,255,255,0.05)" }
+        },
+        yVol: {
+          position: "right",
+          display: hasVolume,
+          // Set max to 4× the actual max volume so bars occupy bottom ~25%
+          // of the chart area without overlapping candlesticks
+          afterDataLimits: (axis) => {
+            axis.max = axis.max * 4;
+          },
+          ticks: {
+            color: "rgba(154,161,172,0.5)",
+            maxTicksLimit: 3,
+            callback: (val) => formatCompact(val)
+          },
+          grid: { display: false }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: "#e8eaed",
+            filter: (item) => !item.text.startsWith("_")
+          }
+        },
+        tooltip: {
+          position: "topRight",
+          filter: (ctx) => !ctx.dataset.label.startsWith("_"),
+          callbacks: {
+            label: (ctx) => {
+              if (ctx.dataset.candleData) {
+                const d = ctx.raw;
+                const s = currencySymbol();
+                return `O:${s}${formatNumber(d.o)} H:${s}${formatNumber(d.h)} L:${s}${formatNumber(d.l)} C:${s}${formatNumber(d.c)}`;
+              }
+              if (ctx.dataset.label === "Όγκος") {
+                return `Όγκος: ${formatCompact(ctx.raw.y)}`;
+              }
+              return `${ctx.dataset.label}: ${currencySymbol()}${formatNumber(ctx.parsed.y)}`;
+            }
+          }
+        },
+        zoom: {
+          pan: {
+            enabled: true,   // pan when no drawing tool active
+            mode: "x",
+          },
+          zoom: {
+            wheel: { enabled: true, speed: 0.08 },
+            pinch: { enabled: true },
+            mode: "x",
+          }
+        }
+      }
+    }
+  });
+}
+
+// cache last candle data so the chart can be redrawn (e.g. clearing lines)
+// without refetching from the API
+let _lastCandles = [];
+
+const _renderBigChartImpl = renderBigChart;
+renderBigChart = function(candles) {
+  if (candles && candles.length) _lastCandles = candles;
+  _renderBigChartImpl(_lastCandles);
+  autoSaveSession(); // auto-save whenever chart is (re)drawn
+};
+
+/* Auto-save the current chart session (coin + interval + candles + lines).
+   Keyed by coin+interval so each session overwrites the previous one for
+   the same coin/timeframe — no accumulation of identical slots. */
+function autoSaveSession() {
+  if (!currentModalCoinId || !_lastCandles.length) return;
+  const coinName = modalTitle.textContent.split(" —")[0].trim();
+  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const sessionKey = `session|${currentModalCoinId}|${interval}`;
+
+  const entry = {
+    id: sessionKey,       // stable key — not Date.now() so it overwrites
+    isSession: true,      // flag to distinguish from AI analyses
+    coinName,
+    coinId: currentModalCoinId,
+    interval,
+    date: new Date().toISOString(),
+    savedLines: JSON.parse(JSON.stringify(manualLines)),
+    candles: _lastCandles,
+    tsByCandle: Object.fromEntries(_lastCandles.map(c => [c[0], c])),
+    findings: [],
+    reportHtml: "",
+    summary: "",
+    forecast: null,
+    ohlcSummaryForChat: ""
+  };
+
+  const list = getSavedAnalyses();
+  const filtered = list.filter(e => e.id !== sessionKey);
+  filtered.unshift(entry);
+  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  renderSavedAnalysesList();
+}
+
+/* Linear regression over closing prices */
+function computeRegression() {
+  const candles = _lastCandles;
+  if (!candles || candles.length < 2) return;
+
+  const points = candles.map(c => ({ x: c[0], y: c[4] })); // closing price
+  const n = points.length;
+  const meanX = points.reduce((s, p) => s + p.x, 0) / n;
+  const meanY = points.reduce((s, p) => s + p.y, 0) / n;
+
+  let num = 0, den = 0;
+  points.forEach(p => {
+    num += (p.x - meanX) * (p.y - meanY);
+    den += (p.x - meanX) ** 2;
+  });
+  const slope = den !== 0 ? num / den : 0;
+  const intercept = meanY - slope * meanX;
+
+  const x1 = points[0].x;
+  const x2 = points[n - 1].x;
+  const y1 = slope * x1 + intercept;
+  const y2 = slope * x2 + intercept;
+
+  regressionLine = {
+    points: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
+    slope, intercept
+  };
+
+  // Slope per day (timestamps are in ms)
+  const slopePerDay = slope * 24 * 60 * 60 * 1000;
+  const totalChangePct = y1 !== 0 ? ((y2 - y1) / y1) * 100 : 0;
+  const trendWord = slope > 0 ? "Ανοδική" : (slope < 0 ? "Πτωτική" : "Οριζόντια");
+
+  regStatsEl.innerHTML = `
+    <div>Τάση: <b>${trendWord}</b></div>
+    <div>Μεταβολή στο διάστημα: <b>${totalChangePct >= 0 ? '+' : ''}${totalChangePct.toFixed(2)}%</b></div>
+    <div>Κλίση / ημέρα: <b>${currencySymbol()}${formatNumber(slopePerDay)}</b></div>
+  `;
+
+  if (bigChart) bigChart.update();
+}
+
+/* ---------- Init ---------- */
+(function initDateInputs() {
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("histDateInput").max = today;
+  document.getElementById("txDateInput").max = today;
+  document.getElementById("txDateInput").value = today;
+})();
+loadData();
+setInterval(loadData, 60000);
+</script>
+
+</body>
+</html>

@@ -453,6 +453,7 @@
   <div class="modal-box">
     <div class="modal-head">
       <h2 id="modalTitle">Διάγραμμα</h2>
+      <span id="modalOhlcTicker" style="font-size:0.85rem; color:var(--text-dim); margin-left:auto; margin-right:1rem; font-family:monospace;"></span>
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
     <div class="modal-tools">
@@ -618,19 +619,6 @@
 
 <script>
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
-
-// Register a fixed top-right tooltip positioner so it doesn't overlap candlesticks
-if (typeof Chart !== "undefined" && Chart.Tooltip) {
-  Chart.Tooltip.positioners.topRight = function(elements, eventPosition) {
-    const chart = this.chart;
-    return {
-      x: chart.chartArea.right - 10,
-      y: chart.chartArea.top + 10,
-      xAlign: "right",
-      yAlign: "top"
-    };
-  };
-}
 
 // Vertical crosshair line at cursor position
 const crosshairPlugin = {
@@ -3632,7 +3620,7 @@ const currentPricePlugin = {
     ctx.stroke();
     ctx.restore();
 
-    // Price label badge on the right
+    // Price label badge on the left
     const text = currencySymbol() + formatNumber(price);
     ctx.save();
     ctx.font = "bold 12px sans-serif";
@@ -3662,6 +3650,22 @@ const currentPricePlugin = {
 if (typeof Chart !== "undefined") {
   Chart.register(manualLinesPlugin);
   Chart.register(currentPricePlugin);
+}
+
+/* Update the OHLC info ticker on the right side of the modal header.
+   Shows the latest candle's O/H/L/C by default, and live-updates to
+   whichever candle the user is hovering over (via the Chart.js external
+   tooltip handler below) — keeps this information off the canvas
+   entirely so it never overlaps candles/lines. */
+function updateOhlcTicker(o, h, l, c) {
+  const el = document.getElementById("modalOhlcTicker");
+  if (!el) return;
+  const s = currencySymbol();
+  el.innerHTML =
+    `O:<b style="color:var(--text)">${s}${formatNumber(o)}</b> ` +
+    `H:<b style="color:var(--green)">${s}${formatNumber(h)}</b> ` +
+    `L:<b style="color:var(--red)">${s}${formatNumber(l)}</b> ` +
+    `C:<b style="color:var(--text)">${s}${formatNumber(c)}</b>`;
 }
 
 function dataCoordsFromEvent(evt) {
@@ -4029,6 +4033,7 @@ function closeChartModal() {
     bigChart.destroy();
     bigChart = null;
   }
+  document.getElementById("modalOhlcTicker").textContent = "";
   analysisCustomRange = null;
   analysisDragState = null;
   document.getElementById("selectionOverlay").style.display = "none";
@@ -4339,19 +4344,23 @@ function renderBigChart(candles) {
           }
         },
         tooltip: {
-          position: "topRight",
+          enabled: false, // rendered externally in the header ticker instead of on-canvas
           filter: (ctx) => !ctx.dataset.label.startsWith("_"),
-          callbacks: {
-            label: (ctx) => {
-              if (ctx.dataset.candleData) {
-                const d = ctx.raw;
-                const s = currencySymbol();
-                return `O:${s}${formatNumber(d.o)} H:${s}${formatNumber(d.h)} L:${s}${formatNumber(d.l)} C:${s}${formatNumber(d.c)}`;
-              }
-              if (ctx.dataset.label === "Όγκος") {
-                return `Όγκος: ${formatCompact(ctx.raw.y)}`;
-              }
-              return `${ctx.dataset.label}: ${currencySymbol()}${formatNumber(ctx.parsed.y)}`;
+          external: (context) => {
+            const tt = context.tooltip;
+            const candleDs = context.chart.data.datasets.find(d => d.candleData);
+            if (!candleDs || !candleDs.data || candleDs.data.length === 0) return;
+
+            if (!tt || tt.opacity === 0 || !tt.dataPoints || tt.dataPoints.length === 0) {
+              // Not hovering — show the latest candle by default
+              const last = candleDs.data[candleDs.data.length - 1];
+              updateOhlcTicker(last.o, last.h, last.l, last.c);
+              return;
+            }
+            const candlePoint = tt.dataPoints.find(dp => dp.dataset.candleData);
+            if (candlePoint) {
+              const d = candlePoint.raw;
+              updateOhlcTicker(d.o, d.h, d.l, d.c);
             }
           }
         },

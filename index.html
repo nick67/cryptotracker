@@ -144,6 +144,17 @@
   .modal-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .big-chart-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
 
+  /* Small centered dialog (used for Cloud Sync settings, etc.) */
+  .dialog-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 200; align-items: center; justify-content: center; padding: 1rem;
+  }
+  .dialog-overlay.open { display: flex; }
+  .dialog-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 520px; padding: 1.2rem; max-height: 90vh; overflow-y: auto;
+  }
+
   /* White crosshair cursor for the dark chart background */
   #bigChart {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/%3E%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/%3E%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
@@ -226,8 +237,49 @@
 </head>
 <body>
 
-<h1>Παρακολούθηση χαρτοφυλακίου κρυπτονομισμάτων</h1>
-<p class="subtitle">Τιμές, μεταβολές, candlestick διαγράμματα και ανάλυση τάσεων από το CoinGecko (δωρεάν δημόσιο API).</p>
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
+  <div>
+    <h1>Παρακολούθηση χαρτοφυλακίου κρυπτονομισμάτων</h1>
+    <p class="subtitle">Τιμές, μεταβολές, candlestick διαγράμματα και ανάλυση τάσεων από το CoinGecko (δωρεάν δημόσιο API).</p>
+  </div>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    <span id="syncStatusIndicator" style="font-size:0.78rem; color:var(--text-dim);"></span>
+    <button id="cloudSyncBtn">☁ Cloud Sync</button>
+  </div>
+</div>
+
+<!-- CLOUD SYNC MODAL -->
+<div class="dialog-overlay" id="syncModal">
+  <div class="dialog-box">
+    <div class="modal-head">
+      <h2>☁ Συγχρονισμός μέσω Nextcloud</h2>
+      <button class="icon-btn" id="closeSyncModalBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:0.7rem; font-size:0.88rem;">
+      <p style="color:var(--text-dim); margin:0;">
+        Συγχρονίζει watchlist, νόμισμα αναφοράς, συναλλαγές χαρτοφυλακίου και αποθηκευμένες αναλύσεις (όχι API keys) μέσω WebDAV στο δικό σου Nextcloud server.
+      </p>
+      <label style="color:var(--text-dim); font-size:0.82rem;">Διεύθυνση server (π.χ. https://cloud.example.gr)</label>
+      <input type="text" id="syncServerUrl" placeholder="https://cloud.example.gr">
+      <label style="color:var(--text-dim); font-size:0.82rem;">Όνομα χρήστη</label>
+      <input type="text" id="syncUsername" placeholder="username">
+      <label style="color:var(--text-dim); font-size:0.82rem;">App password (όχι ο κύριος κωδικός σου)</label>
+      <input type="password" id="syncAppPassword" placeholder="app password" autocomplete="off">
+      <label style="color:var(--text-dim); font-size:0.82rem;">Διαδρομή αρχείου</label>
+      <input type="text" id="syncFilePath" value="crypto-tracker-sync.json">
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.3rem;">
+        <button id="saveSyncConfigBtn" class="primary">Αποθήκευση ρυθμίσεων</button>
+        <button id="testSyncBtn">🔌 Δοκιμή σύνδεσης</button>
+        <button id="syncNowBtn">↕ Συγχρονισμός τώρα</button>
+        <button id="disableSyncBtn" style="color:var(--red); border-color:var(--red);">Απενεργοποίηση</button>
+      </div>
+      <div id="syncModalStatus" style="font-size:0.82rem; color:var(--text-dim);"></div>
+      <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:var(--text-dim); margin-top:0.3rem;">
+        <input type="checkbox" id="autoSyncToggle"> Αυτόματος συγχρονισμός κατά την εκκίνηση και μετά από αλλαγές
+      </label>
+    </div>
+  </div>
+</div>
 
 <div class="tabs">
   <button class="tab-btn active" data-tab="watchlist">Παρακολούθηση</button>
@@ -712,6 +764,233 @@ let txIdCounter = transactions.reduce((max, t) => Math.max(max, t.id || 0), 0);
   }
   localStorage.removeItem(PORTFOLIO_KEY);
 })();
+
+/* =====================================================
+   CLOUD SYNC (Nextcloud WebDAV)
+   ===================================================== */
+const SYNC_CONFIG_KEY = "crypto_tracker_sync_config_v1";
+const SYNC_LAST_KEY = "crypto_tracker_sync_lastsync_v1"; // ISO timestamp of last successful sync
+let syncDirtyTimer = null;
+
+function getSyncConfig() {
+  try { return JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY) || "null"); }
+  catch { return null; }
+}
+function saveSyncConfigToStorage(cfg) {
+  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg));
+}
+function clearSyncConfig() {
+  localStorage.removeItem(SYNC_CONFIG_KEY);
+  localStorage.removeItem(SYNC_LAST_KEY);
+}
+
+function webdavUrl(cfg) {
+  const base = cfg.serverUrl.replace(/\/+$/, "");
+  const path = cfg.filePath.replace(/^\/+/, "");
+  return `${base}/remote.php/dav/files/${encodeURIComponent(cfg.username)}/${path}`;
+}
+function basicAuthHeader(cfg) {
+  return "Basic " + btoa(`${cfg.username}:${cfg.appPassword}`);
+}
+
+async function webdavGet(cfg) {
+  const res = await fetch(webdavUrl(cfg), {
+    method: "GET",
+    headers: { "Authorization": basicAuthHeader(cfg) }
+  });
+  if (res.status === 404) return null; // file doesn't exist yet — first sync
+  if (!res.ok) throw new Error(`WebDAV GET ${res.status}`);
+  return res.json();
+}
+
+async function webdavPut(cfg, payload) {
+  const res = await fetch(webdavUrl(cfg), {
+    method: "PUT",
+    headers: {
+      "Authorization": basicAuthHeader(cfg),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload, null, 2)
+  });
+  if (!res.ok) throw new Error(`WebDAV PUT ${res.status}`);
+}
+
+/* Build the payload that gets synced. Saved analyses are stripped of their
+   heavy candle arrays (those are re-fetched on demand) to keep the file
+   small; line coordinates and report text are kept since they're what
+   actually needs to persist. */
+function buildSyncPayload() {
+  // Auto "session" saves are local continuity aids only — not synced.
+  const savedForSync = getSavedAnalyses()
+    .filter(e => !e.isSession)
+    .map(e => {
+      const { candles, tsByCandle, ...rest } = e;
+      return rest;
+    });
+  return {
+    updatedAt: new Date().toISOString(),
+    watchlist,
+    currency,
+    transactions,
+    savedAnalyses: savedForSync
+  };
+}
+
+function applySyncPayload(data) {
+  if (Array.isArray(data.watchlist)) {
+    watchlist = data.watchlist;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
+  }
+  if (data.currency === "eur" || data.currency === "usd") {
+    currency = data.currency;
+    localStorage.setItem(CURRENCY_KEY, currency);
+    setCurrencyButtons();
+  }
+  if (Array.isArray(data.transactions)) {
+    transactions = data.transactions;
+    txIdCounter = transactions.reduce((max, t) => Math.max(max, t.id || 0), 0);
+    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+  }
+  if (Array.isArray(data.savedAnalyses)) {
+    // Keep local-only "session" entries intact; replace named/AI entries with synced ones
+    const localSessions = getSavedAnalyses().filter(e => e.isSession);
+    const merged = [...data.savedAnalyses, ...localSessions];
+    localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(merged));
+  }
+  loadData();
+}
+
+/* Core sync orchestration: compares remote vs local timestamps and decides
+   which direction to sync. silent=true suppresses UI status messages
+   (used for the automatic on-load sync). */
+async function syncNow(silent) {
+  const cfg = getSyncConfig();
+  const statusFn = (msg) => {
+    if (!silent) {
+      const el = document.getElementById("syncModalStatus");
+      if (el) el.textContent = msg;
+    }
+    document.getElementById("syncStatusIndicator").textContent = msg;
+  };
+
+  if (!cfg || !cfg.serverUrl || !cfg.username || !cfg.appPassword) {
+    if (!silent) statusFn("Συμπλήρωσε όλα τα πεδία πρώτα.");
+    return;
+  }
+
+  statusFn("Συγχρονισμός...");
+  try {
+    const remote = await webdavGet(cfg);
+    const lastSync = localStorage.getItem(SYNC_LAST_KEY);
+
+    if (!remote) {
+      // No remote file yet — push local state as the initial version
+      await webdavPut(cfg, buildSyncPayload());
+      localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
+      statusFn("✓ Αρχικό αντίγραφο ανέβηκε στο Nextcloud.");
+      return;
+    }
+
+    const remoteTime = new Date(remote.updatedAt || 0).getTime();
+    const lastSyncTime = lastSync ? new Date(lastSync).getTime() : 0;
+
+    if (remoteTime > lastSyncTime) {
+      // Remote has changes we don't have locally (e.g. from another device)
+      applySyncPayload(remote);
+      localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
+      statusFn("✓ Ενημερώθηκε από το cloud.");
+    } else {
+      // Local is at least as current — push our state up
+      await webdavPut(cfg, buildSyncPayload());
+      localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
+      statusFn("✓ Συγχρονισμένο.");
+    }
+  } catch (err) {
+    console.error("Sync error:", err);
+    statusFn(`Σφάλμα συγχρονισμού: ${err.message}`);
+  }
+}
+
+/* Debounced push: call after any local mutation when auto-sync is on.
+   Waits a few seconds of inactivity before pushing, to avoid hammering
+   the server on rapid successive changes. */
+function markDirtyForSync() {
+  const cfg = getSyncConfig();
+  if (!cfg || !cfg.autoSync) return;
+  if (syncDirtyTimer) clearTimeout(syncDirtyTimer);
+  syncDirtyTimer = setTimeout(() => syncNow(true), 4000);
+}
+
+/* ---------- Cloud sync UI wiring ---------- */
+document.getElementById("cloudSyncBtn").addEventListener("click", () => {
+  const cfg = getSyncConfig() || {};
+  document.getElementById("syncServerUrl").value = cfg.serverUrl || "";
+  document.getElementById("syncUsername").value = cfg.username || "";
+  document.getElementById("syncAppPassword").value = cfg.appPassword || "";
+  document.getElementById("syncFilePath").value = cfg.filePath || "crypto-tracker-sync.json";
+  document.getElementById("autoSyncToggle").checked = !!cfg.autoSync;
+  document.getElementById("syncModalStatus").textContent = "";
+  document.getElementById("syncModal").classList.add("open");
+});
+document.getElementById("closeSyncModalBtn").addEventListener("click", () => {
+  document.getElementById("syncModal").classList.remove("open");
+});
+document.getElementById("syncModal").addEventListener("click", (e) => {
+  if (e.target.id === "syncModal") document.getElementById("syncModal").classList.remove("open");
+});
+
+document.getElementById("saveSyncConfigBtn").addEventListener("click", () => {
+  const cfg = {
+    serverUrl: document.getElementById("syncServerUrl").value.trim(),
+    username: document.getElementById("syncUsername").value.trim(),
+    appPassword: document.getElementById("syncAppPassword").value,
+    filePath: document.getElementById("syncFilePath").value.trim() || "crypto-tracker-sync.json",
+    autoSync: document.getElementById("autoSyncToggle").checked
+  };
+  if (!cfg.serverUrl || !cfg.username || !cfg.appPassword) {
+    document.getElementById("syncModalStatus").textContent = "Συμπλήρωσε server, username και app password.";
+    return;
+  }
+  saveSyncConfigToStorage(cfg);
+  document.getElementById("syncModalStatus").textContent = "✓ Ρυθμίσεις αποθηκεύτηκαν.";
+});
+
+document.getElementById("testSyncBtn").addEventListener("click", async () => {
+  const cfg = {
+    serverUrl: document.getElementById("syncServerUrl").value.trim(),
+    username: document.getElementById("syncUsername").value.trim(),
+    appPassword: document.getElementById("syncAppPassword").value,
+    filePath: document.getElementById("syncFilePath").value.trim() || "crypto-tracker-sync.json"
+  };
+  const statusEl3 = document.getElementById("syncModalStatus");
+  if (!cfg.serverUrl || !cfg.username || !cfg.appPassword) {
+    statusEl3.textContent = "Συμπλήρωσε όλα τα πεδία πρώτα.";
+    return;
+  }
+  statusEl3.textContent = "Δοκιμή σύνδεσης...";
+  try {
+    const result = await webdavGet(cfg);
+    statusEl3.textContent = result === null
+      ? "✓ Η σύνδεση λειτουργεί (δεν υπάρχει ακόμα αρχείο sync — θα δημιουργηθεί στον πρώτο συγχρονισμό)."
+      : "✓ Η σύνδεση λειτουργεί, βρέθηκε υπάρχον αρχείο sync.";
+  } catch (err) {
+    statusEl3.textContent = `✗ Αποτυχία: ${err.message}. Έλεγξε CORS ρυθμίσεις στον server και τα στοιχεία σύνδεσης.`;
+  }
+});
+
+document.getElementById("syncNowBtn").addEventListener("click", () => syncNow(false));
+
+document.getElementById("disableSyncBtn").addEventListener("click", () => {
+  if (confirm("Απενεργοποίηση cloud sync; Οι τοπικές ρυθμίσεις σύνδεσης θα διαγραφούν.")) {
+    clearSyncConfig();
+    document.getElementById("syncServerUrl").value = "";
+    document.getElementById("syncUsername").value = "";
+    document.getElementById("syncAppPassword").value = "";
+    document.getElementById("autoSyncToggle").checked = false;
+    document.getElementById("syncModalStatus").textContent = "Cloud sync απενεργοποιήθηκε.";
+    document.getElementById("syncStatusIndicator").textContent = "";
+  }
+});
 
 const grid = document.getElementById("grid");
 const emptyMsg = document.getElementById("emptyMsg");
@@ -1269,6 +1548,7 @@ document.getElementById("curEUR").addEventListener("click", () => {
   localStorage.setItem(CURRENCY_KEY, currency);
   setCurrencyButtons();
   loadData();
+  markDirtyForSync();
   if (document.getElementById("tab-tradingview").classList.contains("active")) loadTradingViewWidget();
   if (chartModal.classList.contains("open")) openChartModal(currentModalCoinId, latestMarketData[currentModalCoinId]?.name || currentModalCoinId, currentModalSymbol);
 });
@@ -1277,6 +1557,7 @@ document.getElementById("curUSD").addEventListener("click", () => {
   localStorage.setItem(CURRENCY_KEY, currency);
   setCurrencyButtons();
   loadData();
+  markDirtyForSync();
   if (document.getElementById("tab-tradingview").classList.contains("active")) loadTradingViewWidget();
   if (chartModal.classList.contains("open")) openChartModal(currentModalCoinId, latestMarketData[currentModalCoinId]?.name || currentModalCoinId, currentModalSymbol);
 });
@@ -1288,6 +1569,7 @@ document.getElementById("addBtn").addEventListener("click", () => {
     watchlist.push(id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
     loadData();
+    markDirtyForSync();
   }
 });
 document.getElementById("refreshBtn").addEventListener("click", loadData);
@@ -1296,11 +1578,13 @@ function removeCoin(id) {
   watchlist = watchlist.filter(c => c !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
   loadData();
+  markDirtyForSync();
 }
 
 /* ---------- Portfolio (transaction) actions ---------- */
 function saveTransactions() {
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+  markDirtyForSync();
 }
 
 document.getElementById("addTxBtn").addEventListener("click", () => {
@@ -2531,12 +2815,14 @@ function saveAnalysis(entry) {
   if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
   localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
   renderSavedAnalysesList();
+  markDirtyForSync();
 }
 
 function deleteAnalysis(id) {
   const list = getSavedAnalyses().filter(e => e.id !== id);
   localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
   renderSavedAnalysesList();
+  markDirtyForSync();
 }
 
 /* Manual, user-triggered save: captures the current chart state (lines +
@@ -2580,6 +2866,7 @@ document.getElementById("manualSaveBtn").addEventListener("click", () => {
   if (list.length > MAX_SAVED_ANALYSES) list.length = MAX_SAVED_ANALYSES;
   localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
   renderSavedAnalysesList();
+  markDirtyForSync();
   document.getElementById("analysisRangeHint").textContent = `✓ Αποθηκεύτηκε ως «${entry.name}»`;
 });
 
@@ -3946,6 +4233,14 @@ function computeRegression() {
 })();
 loadData();
 setInterval(loadData, 60000);
+
+// Silent auto-sync on load, if configured
+(function initAutoSync() {
+  const cfg = getSyncConfig();
+  if (cfg && cfg.autoSync) {
+    setTimeout(() => syncNow(true), 1200); // small delay so initial render isn't blocked
+  }
+})();
 </script>
 
 </body>

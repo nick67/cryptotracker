@@ -281,6 +281,24 @@
   </div>
 </div>
 
+<!-- ORDER BOOK MODAL -->
+<div class="dialog-overlay" id="orderBookModal">
+  <div class="dialog-box" style="max-width:780px;">
+    <div class="modal-head">
+      <h2 id="orderBookTitle">📶 Προσφορά / Ζήτηση</h2>
+      <button class="icon-btn" id="closeOrderBookBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.7rem; flex-wrap:wrap;">
+      <span id="orderBookStatus" style="color:var(--text-dim); font-size:0.82rem;"></span>
+      <button id="orderBookRefreshBtn" style="margin-left:auto; border-color:#22c55e; color:#22c55e; font-size:0.8rem; padding:0.25rem 0.6rem;">↻ Ανανέωση</button>
+    </div>
+    <div style="position:relative; height:520px;">
+      <canvas id="orderBookChart"></canvas>
+    </div>
+    <div id="orderBookSummary" style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:0.8rem; font-size:0.85rem; color:var(--text-dim);"></div>
+  </div>
+</div>
+
 <div class="tabs">
   <button class="tab-btn active" data-tab="watchlist">Παρακολούθηση</button>
   <button class="tab-btn" data-tab="portfolio">Χαρτοφυλάκιο</button>
@@ -456,6 +474,7 @@
       <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻ Ανανέωση</button>
       <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢ Reset zoom</button>
       <button id="snapshotBtn">📸 Αποθήκευση</button>
+      <button id="orderBookBtn">📶 Προσφορά/Ζήτηση</button>
       <button id="analyzeBtn">🤖 Ανάλυση σχηματισμών</button>
       <span class="hint" id="modalHint"></span>
     </div>
@@ -2406,6 +2425,144 @@ document.getElementById("snapshotBtn").addEventListener("click", async () => {
   link.href = offscreen.toDataURL("image/png");
   link.click();
 });
+
+/* =====================================================
+   ORDER BOOK HISTOGRAM (bid/ask depth)
+   ===================================================== */
+let orderBookChartInstance = null;
+
+document.getElementById("orderBookBtn").addEventListener("click", () => {
+  document.getElementById("orderBookModal").classList.add("open");
+  loadOrderBook();
+});
+document.getElementById("closeOrderBookBtn").addEventListener("click", () => {
+  document.getElementById("orderBookModal").classList.remove("open");
+});
+document.getElementById("orderBookModal").addEventListener("click", (e) => {
+  if (e.target.id === "orderBookModal") document.getElementById("orderBookModal").classList.remove("open");
+});
+document.getElementById("orderBookRefreshBtn").addEventListener("click", loadOrderBook);
+
+async function loadOrderBook() {
+  const statusEl4 = document.getElementById("orderBookStatus");
+  const titleEl = document.getElementById("orderBookTitle");
+  const summaryEl = document.getElementById("orderBookSummary");
+
+  if (!currentModalCoinId) return;
+  const coinName = modalTitle.textContent.split(" —")[0].trim();
+  titleEl.textContent = `📶 Προσφορά / Ζήτηση — ${coinName}`;
+  statusEl4.textContent = "Φόρτωση...";
+  summaryEl.innerHTML = "";
+
+  try {
+    let bids = [], asks = [], denom = "";
+
+    if (dataSource === "kraken") {
+      const pair = KRAKEN_EUR_MAP[currentModalCoinId];
+      const res = await fetch(`${KRAKEN_BASE}/Depth?pair=${pair}&count=20`);
+      const data = await res.json();
+      const key = Object.keys(data.result || {})[0];
+      if (!key) throw new Error("Δεν βρέθηκαν δεδομένα.");
+      bids = data.result[key].bids.map(b => [parseFloat(b[0]), parseFloat(b[1])]);
+      asks = data.result[key].asks.map(a => [parseFloat(a[0]), parseFloat(a[1])]);
+      denom = "€";
+    } else if (dataSource === "binance") {
+      const symbol = BINANCE_SYMBOL_MAP[currentModalCoinId];
+      const res = await fetch(`${BINANCE_BASE}/depth?symbol=${symbol}&limit=20`);
+      const data = await res.json();
+      bids = (data.bids || []).map(b => [parseFloat(b[0]), parseFloat(b[1])]);
+      asks = (data.asks || []).map(a => [parseFloat(a[0]), parseFloat(a[1])]);
+      denom = "$";
+    } else {
+      statusEl4.textContent = "Δεν υπάρχει διαθέσιμο order book για αυτό το νόμισμα/πηγή.";
+      if (orderBookChartInstance) { orderBookChartInstance.destroy(); orderBookChartInstance = null; }
+      return;
+    }
+
+    renderOrderBookChart(bids, asks, denom);
+
+    const bestBid = bids[0]?.[0];
+    const bestAsk = asks[0]?.[0];
+    const spreadPct = bestBid && bestAsk ? (((bestAsk - bestBid) / bestBid) * 100).toFixed(3) : "—";
+    const totalBidVol = bids.reduce((s, b) => s + b[1], 0);
+    const totalAskVol = asks.reduce((s, a) => s + a[1], 0);
+
+    summaryEl.innerHTML = `
+      <div>Καλύτερη προσφορά (bid): <b style="color:var(--green)">${denom}${formatNumber(bestBid)}</b></div>
+      <div>Καλύτερη ζήτηση (ask): <b style="color:var(--red)">${denom}${formatNumber(bestAsk)}</b></div>
+      <div>Spread: <b>${spreadPct}%</b></div>
+      <div>Όγκος bids: <b style="color:var(--green)">${formatCompact(totalBidVol)}</b></div>
+      <div>Όγκος asks: <b style="color:var(--red)">${formatCompact(totalAskVol)}</b></div>
+    `;
+    statusEl4.textContent = `Πηγή: ${dataSource === "kraken" ? "Kraken" : "Binance"} · Ενημερώθηκε ${new Date().toLocaleTimeString("el-GR")}`;
+
+  } catch (err) {
+    console.error("Order book error:", err);
+    statusEl4.textContent = `Σφάλμα: ${err.message}`;
+  }
+}
+
+function renderOrderBookChart(bids, asks, denom) {
+  const canvas = document.getElementById("orderBookChart");
+
+  // Sort descending so highest ask is at the top and lowest bid at the
+  // bottom — matches the standard exchange order-book reading order
+  // (asks above, spread in the middle, bids below).
+  const levels = [
+    ...bids.map(([price, qty]) => ({ price, qty, side: "bid" })),
+    ...asks.map(([price, qty]) => ({ price, qty, side: "ask" }))
+  ].sort((a, b) => b.price - a.price);
+
+  const labels = levels.map(l => denom + formatNumber(l.price));
+  const data = levels.map(l => l.qty);
+  const colors = levels.map(l => l.side === "bid" ? "rgba(61,220,151,0.75)" : "rgba(255,92,108,0.75)");
+  const borderColors = levels.map(l => l.side === "bid" ? "#3ddc97" : "#ff5c6c");
+
+  if (orderBookChartInstance) {
+    orderBookChartInstance.destroy();
+  }
+
+  orderBookChartInstance = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Ποσότητα",
+        data,
+        backgroundColor: colors,
+        borderColor: borderColors,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const lvl = levels[ctx.dataIndex];
+              return `${lvl.side === "bid" ? "Bid" : "Ask"}: ${formatCompact(lvl.qty)} @ ${denom}${formatNumber(lvl.price)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#9aa1ac", callback: (v) => formatCompact(v) },
+          grid: { color: "rgba(255,255,255,0.05)" }
+        },
+        y: {
+          ticks: { color: "#9aa1ac", autoSkip: true, maxTicksLimit: 20, font: { size: 10 } },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
 
 /* =====================================================
    AI PATTERN ANALYSIS SYSTEM

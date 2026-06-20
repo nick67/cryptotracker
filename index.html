@@ -1738,9 +1738,27 @@ function renderCards(coins) {
   coins.forEach(coin => {
     const change = coin.price_change_percentage_24h;
     const isPos = change >= 0;
+    const ba = bidAskData[coin.id];
 
     const card = document.createElement("div");
     card.className = "card";
+
+    const bidAskBlock = ba
+      ? `<div class="badge-note" style="color:var(--green); background:rgba(61,220,151,0.1); border-color:rgba(61,220,151,0.25);">Bid/Ask πραγματικού χρόνου (${ba.source}${ba.denom === "USDT" ? ", USDT≈USD" : ""})</div>
+         <div class="rows">
+           <div>Bid (προσφορά αγοράς): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.bid)}</b></div>
+           <div>Ask (ζήτηση πώλησης): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.ask)}</b></div>
+           <div>Spread: <b>${(((ba.ask - ba.bid) / ba.bid) * 100).toFixed(3)}%</b></div>
+           <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
+         </div>`
+      : `<div class="badge-note">Bid/Ask μη διαθέσιμα · εμφανίζονται 24ω χαμηλό/υψηλό</div>
+         <div class="rows">
+           <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h)}</b></div>
+           <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h)}</b></div>
+           <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
+           <div>Κεφαλαιοποίηση: <b>${symbol}${formatCompact(coin.market_cap)}</b></div>
+         </div>`;
+
     card.innerHTML = `
       <div class="card-head">
         <div class="coin-name">
@@ -1757,13 +1775,7 @@ function renderCards(coins) {
       <div class="change ${isPos ? 'pos' : 'neg'}">
         ${isPos ? '▲' : '▼'} ${change === null || change === undefined ? '—' : Math.abs(change).toFixed(2) + '%'} (24ω)
       </div>
-      <div class="badge-note">Bid/Ask μη διαθέσιμα · εμφανίζονται 24ω χαμηλό/υψηλό</div>
-      <div class="rows">
-        <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h)}</b></div>
-        <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h)}</b></div>
-        <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
-        <div>Κεφαλαιοποίηση: <b>${symbol}${formatCompact(coin.market_cap)}</b></div>
-      </div>
+      ${bidAskBlock}
       <div class="chart-wrap"><canvas></canvas></div>
     `;
     card.querySelector(".remove").addEventListener("click", () => removeCoin(coin.id));
@@ -2051,6 +2063,70 @@ async function computeHistoricalChange() {
   histStatus.textContent = "";
 }
 
+/* ---------- Real-time bid/ask (from exchanges, not CoinGecko) ---------- */
+let bidAskData = {}; // coinId -> { bid, ask, source: 'kraken'|'binance', denom: 'EUR'|'USDT' }
+
+async function fetchBidAsk(coinIds) {
+  // Prefer Kraken (real EUR bid/ask) when displaying in EUR and a pair exists;
+  // otherwise fall back to Binance (USDT bid/ask) where available.
+  const krakenIds = currency === "eur"
+    ? coinIds.filter(id => KRAKEN_EUR_MAP[id])
+    : [];
+  const binanceIds = coinIds.filter(id => !krakenIds.includes(id) && BINANCE_SYMBOL_MAP[id]);
+
+  const tasks = [];
+
+  // Kraken: one request per pair (avoids ambiguous key-matching on batched
+  // multi-pair responses, since Kraken returns internal pair names that
+  // don't always match the altname we queried with)
+  krakenIds.forEach(id => {
+    const pair = KRAKEN_EUR_MAP[id];
+    tasks.push(
+      fetch(`${KRAKEN_BASE}/Ticker?pair=${pair}`)
+        .then(res => res.json())
+        .then(data => {
+          const key = Object.keys(data.result || {})[0];
+          if (!key) return;
+          const t = data.result[key];
+          bidAskData[id] = {
+            bid: parseFloat(t.b[0]),
+            ask: parseFloat(t.a[0]),
+            source: "Kraken",
+            denom: "EUR"
+          };
+        })
+        .catch(err => console.error("Kraken ticker error for", id, err))
+    );
+  });
+
+  // Binance: single batched request for all symbols at once
+  if (binanceIds.length > 0) {
+    const symbols = binanceIds.map(id => `"${BINANCE_SYMBOL_MAP[id]}"`).join(",");
+    tasks.push(
+      fetch(`${BINANCE_BASE}/ticker/bookTicker?symbols=[${symbols}]`)
+        .then(res => res.json())
+        .then(data => {
+          const bySymbol = {};
+          (Array.isArray(data) ? data : [data]).forEach(t => { bySymbol[t.symbol] = t; });
+          binanceIds.forEach(id => {
+            const sym = BINANCE_SYMBOL_MAP[id];
+            const t = bySymbol[sym];
+            if (!t) return;
+            bidAskData[id] = {
+              bid: parseFloat(t.bidPrice),
+              ask: parseFloat(t.askPrice),
+              source: "Binance",
+              denom: "USDT"
+            };
+          });
+        })
+        .catch(err => console.error("Binance bookTicker error:", err))
+    );
+  }
+
+  await Promise.allSettled(tasks);
+}
+
 /* ---------- Data loading ---------- */
 let isLoading = false;
 
@@ -2088,9 +2164,10 @@ async function loadData() {
   try {
     const portfolioIds = Array.from(new Set(transactions.map(t => t.coinId)));
     const allIds = Array.from(new Set([...watchlist, ...portfolioIds]));
-    if (allIds.length > 0) {
-      await fetchMarketDataFor(allIds);
-    }
+    await Promise.all([
+      allIds.length > 0 ? fetchMarketDataFor(allIds) : Promise.resolve(),
+      fetchBidAsk(watchlist)
+    ]);
 
     const ordered = watchlist.map(id => latestMarketData[id]).filter(Boolean);
     renderCards(ordered);

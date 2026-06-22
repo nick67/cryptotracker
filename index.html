@@ -445,7 +445,7 @@
 <footer>
   Σημείωση: το δωρεάν API του CoinGecko δεν παρέχει πραγματικό βιβλίο εντολών (bid/ask).
   Ως πλησιέστερα διαθέσιμα στοιχεία προσφοράς/ζήτησης εμφανίζονται το 24ω υψηλό και χαμηλό.
-  Αυτόματη ανανέωση κάθε 60 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
+  Αυτόματη ανανέωση κάθε 15 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
 </footer>
 
 <!-- CHART MODAL -->
@@ -4475,7 +4475,7 @@ function computeRegression() {
   document.getElementById("txDateInput").value = today;
 })();
 loadData();
-setInterval(loadData, 60000);
+setInterval(loadData, 15000);
 
 // Silent auto-sync on load, if configured
 (function initAutoSync() {

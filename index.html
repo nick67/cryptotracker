@@ -469,6 +469,7 @@
       <button id="trendlineBtn">📈 Γραμμή τάσης (κλικ 2 σημείων)</button>
       <button id="channelBtn">📊 Κανάλι τάσης (κλικ 2 σημείων)</button>
       <button id="hlineBtn">➖ Οριζόντια γραμμή (κλικ 1 σημείου)</button>
+      <button id="toggleLinesBtn" title="Εμφάνιση/απόκρυψη γραμμών" style="border-color:#a78bfa;color:#a78bfa;">👁 Γραμμές</button>
       <button id="editLinesBtn">✥ Μετακίνηση/επέκταση γραμμών</button>
       <button id="deleteLinesBtn" style="border-color:#ef4444;color:#ef4444;">🗑 Διαγραφή γραμμής (κλικ)</button>
       <button id="clearLinesBtn" style="border-color:#ef4444;color:#ef4444;">✕ Καθαρισμός γραμμών</button>
@@ -1264,27 +1265,15 @@ ${coinBlocks}
 Απάντησε στα ελληνικά, δομημένα, με επικεφαλίδες. Χωρίς επενδυτικές συμβουλές — μόνο τεχνική ανάλυση.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
+    const data = await anthropicFetch(apiKey, {
         model: "claude-sonnet-4-6",
         max_tokens: 2000,
         messages: [{ role: "user", content: prompt }]
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || "HTTP " + res.status);
-    }
-
-    const data = await res.json();
+      },
+      (attempt, delay) => {
+        const hint = typeof $analysisHint === 'function' ? $analysisHint() : null;
+        if (hint) hint.textContent = `Overloaded — προσπάθεια ${attempt+1}/3 σε ${delay/1000}δλ...`;
+      });
     const text = data.content?.[0]?.text || "";
 
     // Render report with basic markdown → HTML
@@ -1336,23 +1325,16 @@ async function sendCompareChat() {
   const systemPrompt = `Είσαι ειδικός τεχνικής ανάλυσης. Έχεις εβδομαδιαία OHLC δεδομένα για τα παρακάτω νομίσματα:\n\n${_compareSummaryForChat}\n\nΑπαντάς στα ελληνικά, συνοπτικά, με αναφορά σε συγκεκριμένα δεδομένα. Δεν δίνεις επενδυτικές συμβουλές.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
+    const data = await anthropicFetch(apiKey, {
         model: "claude-sonnet-4-6",
         max_tokens: 600,
         system: systemPrompt,
         messages: _compareChatHistory
-      })
-    });
-
-    const data = await res.json();
+      },
+      (attempt, delay) => {
+        const hint = typeof $analysisHint === 'function' ? $analysisHint() : null;
+        if (hint) hint.textContent = `Overloaded — προσπάθεια ${attempt+1}/3 σε ${delay/1000}δλ...`;
+      });
     const reply = data.content?.[0]?.text || "Δεν ήταν δυνατή η απάντηση.";
     _compareChatHistory.push({ role: "assistant", content: reply });
 
@@ -1473,27 +1455,15 @@ ${payload}
 ΑΠΑΝΤΗΣΕ ΜΟΝΟ με έγκυρο JSON array (χωρίς backticks, χωρίς κείμενο εκτός JSON):
 [{"i":0,"title":"...","summary":"..."}, ...]`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({
+  const data = await anthropicFetch(apiKey, {
       model: "claude-sonnet-4-6",
       max_tokens: 3000,
       messages: [{ role: "user", content: prompt }]
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || "HTTP " + res.status);
-  }
-
-  const data = await res.json();
+    },
+      (attempt, delay) => {
+        const hint = typeof $analysisHint === 'function' ? $analysisHint() : null;
+        if (hint) hint.textContent = `Overloaded — προσπάθεια ${attempt+1}/3 σε ${delay/1000}δλ...`;
+      });
   const text = data.content?.[0]?.text || "";
   let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   const jsonStart = clean.indexOf("[");
@@ -2224,6 +2194,7 @@ let channelOffset = null; // y-offset for the parallel channel line
 // manualLines: { id, type: 'trend'|'horizontal', p1: {x,y}, p2: {x,y} }
 let manualLines = [];
 let hiddenPatternTypes = new Set(); // AI pattern types currently hidden
+let linesVisible = true;            // toggle: show/hide all manual lines
 let regressionLine = null; // {points: [...], slope, intercept} or null
 let lineIdCounter = 0;
 
@@ -2271,6 +2242,15 @@ document.getElementById("regressionBtn").addEventListener("click", () => {
 document.getElementById("clearLinesBtn").addEventListener("click", () => {
   resetDrawings();
   renderBigChart();
+});
+
+document.getElementById("toggleLinesBtn").addEventListener("click", () => {
+  linesVisible = !linesVisible;
+  const btn = document.getElementById("toggleLinesBtn");
+  btn.style.opacity = linesVisible ? "1" : "0.4";
+  btn.title = linesVisible ? "Απόκρυψη γραμμών" : "Εμφάνιση γραμμών";
+  btn.textContent = linesVisible ? "👁 Γραμμές" : "🚫 Γραμμές";
+  if (bigChart) bigChart.update();
 });
 
 // Refresh: reload candle data without clearing drawn lines/tools
@@ -2556,187 +2536,14 @@ function renderOrderBookChart(bids, asks, denom) {
    AI PATTERN ANALYSIS SYSTEM
    ===================================================== */
 const APIKEY_STORAGE = "crypto_tracker_anthropic_key_v1";
-const PATTERN_COLORS = {
-  trend:     "#f97316", // πορτοκαλί
-  triangle:  "#94a3b8", // γκρι-μπλε (αντί μαύρο — ορατό σε dark theme)
-  w_pattern: "#e879f9", // μωβ/φούξια
-  support:   "#22c55e", // πράσινο
-  reversal:  "#ef4444", // κόκκινο
-  resistance:"#f59e0b"  // κίτρινο
-};
 
-function getStoredApiKey() {
-  return localStorage.getItem(APIKEY_STORAGE) || "";
-}
-
-document.getElementById("analyzeBtn").addEventListener("click", () => {
-  const panel = $analysisPanel();
-  const apikeyRow = $apikeyRow();
-  const rangeRow = document.getElementById("analysisRangeRow");
-  const bar = document.getElementById("analysisPanelBar");
-  const isOpen = panel.classList.contains("open");
-
-  if (!isOpen) {
-    panel.classList.add("open");
-    panel.classList.remove("minimized");
-    bar.style.display = "flex";
-    setMinimizeButtonState(false);
-    apikeyRow.style.display = getStoredApiKey() ? "none" : "flex";
-    rangeRow.style.display = "flex";
-    document.getElementById("analyzeBtn").classList.add("active");
-    renderSavedAnalysesList(); // show saved analyses list
-    refreshUserLineSelectionUI(); // show user line checkboxes if any
-    // Show how many user lines will be included
-    const userLineCount = manualLines.filter(l => !l.aiGenerated).length;
-    const hint = $userLinesHint();
-    if (hint) hint.textContent = userLineCount > 0 ? `📐 ${userLineCount} δικές σου γραμμές θα συμπεριληφθούν` : "";
-  } else {
-    panel.classList.remove("open");
-    panel.classList.remove("minimized");
-    bar.style.display = "none";
-    apikeyRow.style.display = "none";
-    rangeRow.style.display = "none";
-    document.getElementById("analyzeBtn").classList.remove("active");
-    panel.innerHTML = "";
-  }
-});
-
-document.getElementById("minimizeAnalysisBtn").addEventListener("click", () => {
-  const panel = $analysisPanel();
-  const isMinimized = panel.classList.toggle("minimized");
-  setMinimizeButtonState(isMinimized);
-});
-
-function setMinimizeButtonState(isMinimized) {
-  const btn = document.getElementById("minimizeAnalysisBtn");
-  btn.textContent = isMinimized ? "▸ Επαναφορά" : "▾ Ελαχιστοποίηση";
-}
-
-document.getElementById("saveKeyBtn").addEventListener("click", () => {
-  const key = document.getElementById("anthropicKeyInput").value.trim();
-  if (!key.startsWith("sk-ant-")) {
-    $analysisHint().textContent = "Μη έγκυρο κλειδί — πρέπει να αρχίζει με sk-ant-";
-    return;
-  }
-  localStorage.setItem(APIKEY_STORAGE, key);
-  $apikeyRow().style.display = "none";
-  document.getElementById("anthropicKeyInput").value = "";
-  $analysisHint().textContent = "✓ API key αποθηκεύτηκε.";
-});
-
-document.getElementById("clearKeyBtn").addEventListener("click", () => {
-  localStorage.removeItem(APIKEY_STORAGE);
-  $apikeyRow().style.display = "flex";
-  document.getElementById("anthropicKeyInput").value = "";
-  $analysisHint().textContent = "API key διαγράφηκε.";
-});
-
-document.getElementById("runAnalysisBtn").addEventListener("click", runPatternAnalysis);
-
-async function runPatternAnalysis() {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) {
-    $apikeyRow().style.display = "flex";
-    $analysisHint().textContent = "Χρειάζεται API key για να εκτελεστεί η ανάλυση.";
-    return;
-  }
-
-  const candles = _lastCandles;
-  if (!candles || candles.length < 10) {
-    $analysisHint().textContent = "Δεν υπάρχουν αρκετά δεδομένα για ανάλυση.";
-    return;
-  }
-
-  // Determine data window
-  const dataRangeVal = document.getElementById("dataRangeSelect").value;
-  let dataCandles = candles;
-  if (dataRangeVal === "half") dataCandles = candles.slice(-Math.floor(candles.length / 2));
-  else if (dataRangeVal === "quarter") dataCandles = candles.slice(-Math.floor(candles.length / 4));
-  else if (dataRangeVal === "custom" && analysisCustomRange) {
-    dataCandles = candles.slice(analysisCustomRange.startIdx, analysisCustomRange.endIdx + 1);
-  }
-
-  // Determine analysis focus window within the data candles
-  const analysisRangeVal = document.getElementById("analysisRangeSelect").value;
-  let analysisCandles = dataCandles;
-  if (analysisRangeVal === "last30") analysisCandles = dataCandles.slice(-Math.min(30, dataCandles.length));
-  else if (analysisRangeVal === "last50") analysisCandles = dataCandles.slice(-Math.min(50, dataCandles.length));
-  else if (analysisRangeVal === "last100") analysisCandles = dataCandles.slice(-Math.min(100, dataCandles.length));
-
-  const panel = $analysisPanel();
-  $analysisHint().textContent =
-    `Ανάλυση ${analysisCandles.length} candles από σύνολο ${dataCandles.length}...`;
-  panel.innerHTML = `<div class="analysis-spinner">🔍 Ανάλυση σε εξέλιξη...</div>`;
-
-  // Build a compact OHLC summary to send (keep token count low)
-  // Limit candles sent to model — more than 120 adds little value and risks
-  // truncating the JSON response. Sample evenly if we have more.
-  let modelCandles = analysisCandles;
-  if (analysisCandles.length > 120) {
-    const step = analysisCandles.length / 120;
-    modelCandles = Array.from({ length: 120 }, (_, i) => analysisCandles[Math.round(i * step)]);
-  }
-
-  const coinName = modalTitle.textContent.split(" —")[0];
-  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
-  const useTime = currentInterval === "1m" || currentInterval === "5m" || currentInterval === "1h";
-
-  // Build a timestamp→candle lookup for the drawing phase
-  const tsByCandle = {};
-  modelCandles.forEach(c => { tsByCandle[c[0]] = c; });
-
-  const ohlcSummary = modelCandles.map(c => {
-    const d = new Date(c[0]);
-    const label = useTime
-      ? d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" }) + " " +
-        d.toLocaleTimeString("el-GR", { hour:"2-digit", minute:"2-digit" })
-      : d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"2-digit" });
-    return `${c[0]}|${label}|${c[1].toFixed(2)}|${c[2].toFixed(2)}|${c[3].toFixed(2)}|${c[4].toFixed(2)}`;
-  }).join("\n");
-
-  const lastCandle = modelCandles[modelCandles.length - 1];
-  const lastPrice = lastCandle ? lastCandle[4].toFixed(2) : "άγνωστη";
-  const lastDate = lastCandle ? new Date(lastCandle[0]).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
-
-  // Describe user-drawn lines so Claude can incorporate them in the analysis
-  const userLines = manualLines.filter(l => !l.aiGenerated && l.includeInAnalysis !== false);
-  let userLinesSection = "";
-  if (userLines.length > 0) {
-    const sym = currencySymbol();
-    const lineDescs = userLines.map(l => {
-      const fmt = (ts) => new Date(ts).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
-      if (l.type === "horizontal") {
-        return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y)}`;
-      } else if (l.type === "channel") {
-        return `• Κανάλι τάσης: κεντρική γραμμή από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)}), πλάτος offset ${sym}${formatNumber(Math.abs(l.offset || 0))}`;
-      } else {
-        return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)})`;
-      }
-    }).join("\n");
-    userLinesSection = `\nΠαρατηρήσεις χρήστη (γραμμές που έχει σχεδιάσει ο χρήστης — λάβε τες υπόψη στην ανάλυση και σχολίασέ τες):
-${lineDescs}\n`;
-  }
-
-  const prompt = `Είσαι ειδικός τεχνικής ανάλυσης κρυπτονομισμάτων. Αναλύεις OHLC δεδομένα για ${coinName} (interval: ${interval}, ${modelCandles.length} candles).
-
-Δεδομένα (timestamp_ms|ημ/ωρα|O|H|L|C):
-${ohlcSummary}
-
-Τελευταία τιμή: ${lastPrice} (${lastDate})
-${userLinesSection}
-Εντόπισε σχηματισμούς: γραμμές τάσης, τρίγωνα, W/M, στήριξη/αντίσταση, αναστροφές τάσης.
-Δώσε ΜΕΧΡΙ 6 ευρήματα (τα πιο σημαντικά). Για κάθε εύρημα: τύπο, σύντομη εξήγηση (1 πρόταση), timestamps, αξιοπιστία.${userLines.length > 0 ? " Αν κάποιο εύρημα σχετίζεται με γραμμή του χρήστη, ανέφερέ το στην explanation." : ""}
-
-Επίσης δώσε πρόβλεψη τιμής για:
-- 24 ώρες: εκτιμώμενη τιμή-στόχος και κατεύθυνση (up/down/sideways)
-- 1 εβδομάδα: εκτιμώμενη τιμή-στόχος και κατεύθυνση
-
-ΑΠΑΝΤΗΣΕ ΜΟΝΟ με έγκυρο JSON (χωρίς backticks, χωρίς κείμενο εκτός JSON):
-{"findings":[{"type":"trend|triangle|w_pattern|support|resistance|reversal","label":"...","explanation":"...","confidence":"high|medium|low","drawing":{"kind":"line|polygon|hline","timestamps":[ts1,ts2],"price":null}}],"summary":"...","forecast":{"h24":{"price":0.0,"direction":"up|down|sideways","note":"..."},"w1":{"price":0.0,"direction":"up|down|sideways","note":"..."}}}
-
-Κανόνες: hline→timestamps:[],price:αριθμός | line→2 timestamps | polygon→3-4 timestamps. Timestamps ΑΚΡΙΒΩΣ από τα δεδομένα. Σύντομα labels/explanations. Η πρόβλεψη είναι εκτίμηση βάσει τεχνικής ανάλυσης, όχι εγγύηση.`;
-
-  try {
+/* Central wrapper for all Anthropic API calls.
+   Retries automatically on 529 "overloaded" responses with exponential
+   backoff (2s → 4s → 8s), up to 3 attempts total. */
+async function anthropicFetch(apiKey, body, onRetry) {
+  const MAX_RETRIES = 3;
+  let delay = 2000;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -2745,45 +2552,27 @@ ${userLinesSection}
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
-        messages: [{ role: "user", content: prompt }]
-      })
+      body: JSON.stringify(body)
     });
 
+    if (res.status === 529 || res.status === 503) {
+      if (attempt < MAX_RETRIES) {
+        if (onRetry) onRetry(attempt, delay);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+        continue;
+      }
+      throw new Error("Overloaded — οι servers του Claude είναι υπερφορτωμένοι. Δοκίμασε ξανά σε λίγο.");
+    }
+
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || "HTTP " + res.status);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
     }
 
-    const data = await res.json();
-    const text = data.content?.[0]?.text || "";
-    let parsed;
-    try {
-      // Strip markdown fences and any preamble text, then find the first
-      // complete JSON object in the response regardless of formatting.
-      let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-      const jsonStart = clean.indexOf("{");
-      const jsonEnd = clean.lastIndexOf("}");
-      if (jsonStart === -1 || jsonEnd === -1) throw new Error("no JSON object found");
-      clean = clean.slice(jsonStart, jsonEnd + 1);
-      parsed = JSON.parse(clean);
-    } catch (e) {
-      // Log the raw response to help diagnose
-      console.error("Raw model response:", text);
-      throw new Error(`Μη έγκυρη απάντηση JSON από το μοντέλο. (${e.message})`);
-    }
-
-    renderAnalysisResults(parsed, analysisCandles, tsByCandle, ohlcSummary, coinName, interval);
-    $analysisHint().textContent =
-      `✓ Βρέθηκαν ${parsed.findings?.length || 0} σχηματισμοί.`;
-
-  } catch (err) {
-    panel.innerHTML = `<div style="color:var(--red)">Σφάλμα ανάλυσης: ${err.message}</div>`;
-    $analysisHint().textContent = "";
-    console.error(err);
+    return res.json();
   }
+  throw new Error("Overloaded — οι servers του Claude είναι υπερφορτωμένοι μετά από 3 προσπάθειες.");
 }
 
 /* Shared helper: convert AI findings into manualLines.
@@ -3247,28 +3036,16 @@ ${_chatOhlcSummary}
   _chatHistory.push({ role: "user", content: question });
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
+    const data = await anthropicFetch(apiKey, {
         model: "claude-sonnet-4-6",
         max_tokens: 600,
         system: systemPrompt,
         messages: _chatHistory
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || "HTTP " + res.status);
-    }
-
-    const data = await res.json();
+      },
+      (attempt, delay) => {
+        const hint = typeof $analysisHint === 'function' ? $analysisHint() : null;
+        if (hint) hint.textContent = `Overloaded — προσπάθεια ${attempt+1}/3 σε ${delay/1000}δλ...`;
+      });
     const reply = data.content?.[0]?.text || "Δεν ήταν δυνατή η απάντηση.";
 
     // Add assistant reply to history
@@ -3347,6 +3124,9 @@ function resetDrawings() {
   channelOffset = null;
   activeTool = null;
   dragState = null;
+  linesVisible = true;
+  const toggleBtn = document.getElementById("toggleLinesBtn");
+  if (toggleBtn) { toggleBtn.style.opacity = "1"; toggleBtn.textContent = "👁 Γραμμές"; }
   document.getElementById("trendlineBtn").classList.remove("active");
   document.getElementById("channelBtn").classList.remove("active");
   document.getElementById("hlineBtn").classList.remove("active");
@@ -3517,32 +3297,109 @@ const manualLinesPlugin = {
       ctx.restore();
     }
 
+    // If lines are toggled off, skip all user-drawn lines
+    if (!linesVisible) return;
+
+    // Helper: compute the y-value (in data coords) of the extended line at a given x pixel
+    function lineYAtX(p1, p2, xpx) {
+      const x1px = xScale.getPixelForValue(p1.x);
+      const y1px = yScale.getPixelForValue(p1.y);
+      const x2px = xScale.getPixelForValue(p2.x);
+      const y2px = yScale.getPixelForValue(p2.y);
+      if (Math.abs(x2px - x1px) < 0.001) return yScale.getValueForPixel(y1px);
+      const slope = (y2px - y1px) / (x2px - x1px);
+      const yPx = y1px + slope * (xpx - x1px);
+      return yScale.getValueForPixel(yPx);
+    }
+
+    // Helper: draw ±3% deviation band around a line
+    function drawDeviationBand(p1, p2, pct = 0.001) {
+      const x1px = xScale.getPixelForValue(p1.x);
+      const y1px = yScale.getPixelForValue(p1.y);
+      const x2px = xScale.getPixelForValue(p2.x);
+      const y2px = yScale.getPixelForValue(p2.y);
+      const slope = Math.abs(x2px - x1px) < 0.001 ? 0 : (y2px - y1px) / (x2px - x1px);
+
+      const pxPerUnit = Math.abs(yScale.getPixelForValue(0) - yScale.getPixelForValue(1));
+
+      function extendedY(baseY_data, offsetPct) {
+        const px = yScale.getPixelForValue(baseY_data);
+        const offsetPx = yScale.getPixelForValue(baseY_data * (1 + offsetPct)) - px;
+        return px + offsetPx; // shifted up/down by % in pixel space
+      }
+
+      // Build 4 corners of the band at chart edges
+      const yA_L = y1px + slope * (chartArea.left - x1px);
+      const yA_R = y1px + slope * (chartArea.right - x1px);
+      const val_A_L = yScale.getValueForPixel(yA_L);
+      const val_A_R = yScale.getValueForPixel(yA_R);
+
+      const yTop_L = yScale.getPixelForValue(val_A_L * (1 - pct));
+      const yTop_R = yScale.getPixelForValue(val_A_R * (1 - pct));
+      const yBot_L = yScale.getPixelForValue(val_A_L * (1 + pct));
+      const yBot_R = yScale.getPixelForValue(val_A_R * (1 + pct));
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+      ctx.clip();
+      // Upper dashed band line
+      ctx.strokeStyle = "rgba(180,180,180,0.5)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, yTop_L);
+      ctx.lineTo(chartArea.right, yTop_R);
+      ctx.stroke();
+      // Lower dashed band line
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, yBot_L);
+      ctx.lineTo(chartArea.right, yBot_R);
+      ctx.stroke();
+      // Shaded area between band lines
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, yTop_L);
+      ctx.lineTo(chartArea.right, yTop_R);
+      ctx.lineTo(chartArea.right, yBot_R);
+      ctx.lineTo(chartArea.left, yBot_L);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(180,180,180,0.06)";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Cursor x pixel (for hover price label)
+    const cursorX = crosshairPlugin._x;
+
     manualLines.forEach(line => {
       // Skip AI-generated lines whose type is hidden by the filter
       if (line.aiGenerated && line.aiPatternType && hiddenPatternTypes.has(line.aiPatternType)) return;
+
       if (line.type === "channel") {
-        const color = "#f59e0b"; // amber for channels
-        // Central line
+        const color = line.aiColor || "#f59e0b";
         const px = drawExtendedLine(line.p1, line.p2, color, null);
-        // Parallel line (offset both points by the same y-delta)
         const p1b = { x: line.p1.x, y: line.p1.y + line.offset };
         const p2b = { x: line.p2.x, y: line.p2.y + line.offset };
         drawExtendedLine(p1b, p2b, color, [4, 3]);
 
-        // Filled area between the two lines (clipped to chart area)
+        // ±3% deviation bands for both channel lines
+        if (!line.aiGenerated) {
+          drawDeviationBand(line.p1, line.p2);
+          drawDeviationBand(p1b, p2b);
+        }
+
+        // Filled area between the two channel lines
         const x1px = xScale.getPixelForValue(line.p1.x);
         const y1aPx = yScale.getPixelForValue(line.p1.y);
-        const y1bPx = yScale.getPixelForValue(line.p1.y + line.offset);
+        const y1bPx = yScale.getPixelForValue(p1b.y);
         const x2px = xScale.getPixelForValue(line.p2.x);
         const y2aPx = yScale.getPixelForValue(line.p2.y);
-        const y2bPx = yScale.getPixelForValue(line.p2.y + line.offset);
-
-        // Extend fill to chart edges using the same slope
-        const slope = (x2px - x1px) !== 0 ? (y2aPx - y1aPx) / (x2px - x1px) : 0;
+        const y2bPx = yScale.getPixelForValue(p2b.y);
+        const slope  = (x2px - x1px) !== 0 ? (y2aPx - y1aPx) / (x2px - x1px) : 0;
         const slopeB = (x2px - x1px) !== 0 ? (y2bPx - y1bPx) / (x2px - x1px) : 0;
-        const yALeft = y1aPx + slope * (chartArea.left - x1px);
-        const yARight = y1aPx + slope * (chartArea.right - x1px);
-        const yBLeft = y1bPx + slopeB * (chartArea.left - x1px);
+        const yALeft  = y1aPx + slope  * (chartArea.left - x1px);
+        const yARight = y1aPx + slope  * (chartArea.right - x1px);
+        const yBLeft  = y1bPx + slopeB * (chartArea.left - x1px);
         const yBRight = y1bPx + slopeB * (chartArea.right - x1px);
 
         ctx.save();
@@ -3559,7 +3416,15 @@ const manualLinesPlugin = {
         ctx.fill();
         ctx.restore();
 
-        // Edit handles on both endpoints of both lines
+        // Hover price label for channel at cursor x
+        if (cursorX !== null && !line.aiGenerated) {
+          const priceA = lineYAtX(line.p1, line.p2, cursorX);
+          const priceB = lineYAtX(p1b, p2b, cursorX);
+          drawPriceLabel(yScale.getPixelForValue(priceA), priceA, color);
+          drawPriceLabel(yScale.getPixelForValue(priceB) + 22, priceB, color);
+        }
+
+        // Edit handles
         if (activeTool === "edit") {
           drawHandle(x1px, y1aPx, color);
           drawHandle(x2px, y2aPx, color);
@@ -3569,12 +3434,26 @@ const manualLinesPlugin = {
       } else {
         const color = line.aiColor || (line.type === "horizontal" ? "#a78bfa" : "#ffb454");
         const px = drawExtendedLine(line.p1, line.p2, color, line.aiGenerated ? [6,3] : null);
+
+        // ±3% deviation band for user-drawn trend lines (not horizontal, not AI)
+        if (!line.aiGenerated && line.type === "trend") {
+          drawDeviationBand(line.p1, line.p2);
+        }
+
         if (activeTool === "edit") {
           drawHandle(px.x1px, px.y1px, color);
           drawHandle(px.x2px, px.y2px, color);
         }
+
+        // Price label on left edge
         if (line.type === "horizontal") {
           drawPriceLabel(px.y1px, line.p1.y, color);
+        }
+
+        // Hover price label for trend lines at cursor x
+        if (cursorX !== null && !line.aiGenerated && line.type === "trend") {
+          const price = lineYAtX(line.p1, line.p2, cursorX);
+          if (price > 0) drawPriceLabel(yScale.getPixelForValue(price), price, color);
         }
       }
     });
@@ -4366,8 +4245,8 @@ function renderBigChart(candles) {
         },
         zoom: {
           pan: {
-            enabled: true,   // pan when no drawing tool active
-            mode: "x",
+            enabled: true,
+            mode: "xy",  // pan both axes
           },
           zoom: {
             wheel: { enabled: true, speed: 0.08 },

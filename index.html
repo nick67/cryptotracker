@@ -2537,6 +2537,15 @@ function renderOrderBookChart(bids, asks, denom) {
    ===================================================== */
 const APIKEY_STORAGE = "crypto_tracker_anthropic_key_v1";
 
+const PATTERN_COLORS = {
+  trend:      "#f97316", // πορτοκαλί
+  triangle:   "#94a3b8", // γκρι-μπλε
+  w_pattern:  "#e879f9", // μωβ/φούξια
+  support:    "#22c55e", // πράσινο
+  reversal:   "#ef4444", // κόκκινο
+  resistance: "#f59e0b"  // κίτρινο
+};
+
 function getStoredApiKey() {
   return localStorage.getItem(APIKEY_STORAGE) || "";
 }

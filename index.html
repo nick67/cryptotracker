@@ -2563,6 +2563,49 @@ document.getElementById("clearKeyBtn").addEventListener("click", () => {
 
 document.getElementById("runAnalysisBtn").addEventListener("click", runPatternAnalysis);
 
+/* ---------- Analyze button: open/close analysis panel ---------- */
+document.getElementById("analyzeBtn").addEventListener("click", () => {
+  const panel = $analysisPanel();
+  const apikeyRow = $apikeyRow();
+  const rangeRow = document.getElementById("analysisRangeRow");
+  const bar = document.getElementById("analysisPanelBar");
+  const isOpen = panel.classList.contains("open");
+
+  if (!isOpen) {
+    panel.classList.add("open");
+    panel.classList.remove("minimized");
+    bar.style.display = "flex";
+    setMinimizeButtonState(false);
+    apikeyRow.style.display = getStoredApiKey() ? "none" : "flex";
+    rangeRow.style.display = "flex";
+    $analyzeBtn().classList.add("active");
+    renderSavedAnalysesList();
+    refreshUserLineSelectionUI();
+    const userLineCount = manualLines.filter(l => !l.aiGenerated).length;
+    const hint = $userLinesHint();
+    if (hint) hint.textContent = userLineCount > 0 ? `📐 ${userLineCount} δικές σου γραμμές θα συμπεριληφθούν` : "";
+  } else {
+    panel.classList.remove("open");
+    panel.classList.remove("minimized");
+    bar.style.display = "none";
+    apikeyRow.style.display = "none";
+    rangeRow.style.display = "none";
+    $analyzeBtn().classList.remove("active");
+    panel.innerHTML = "";
+  }
+});
+
+document.getElementById("minimizeAnalysisBtn").addEventListener("click", () => {
+  const panel = $analysisPanel();
+  const isMinimized = panel.classList.toggle("minimized");
+  setMinimizeButtonState(isMinimized);
+});
+
+function setMinimizeButtonState(isMinimized) {
+  const btn = document.getElementById("minimizeAnalysisBtn");
+  if (btn) btn.textContent = isMinimized ? "▸ Επαναφορά" : "▾ Ελαχιστοποίηση";
+}
+
 /* ---------- Pattern analysis ---------- */
 async function runPatternAnalysis() {
   const apiKey = getStoredApiKey();

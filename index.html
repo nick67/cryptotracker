@@ -2537,9 +2537,155 @@ function renderOrderBookChart(bids, asks, denom) {
    ===================================================== */
 const APIKEY_STORAGE = "crypto_tracker_anthropic_key_v1";
 
-/* Central wrapper for all Anthropic API calls.
-   Retries automatically on 529 "overloaded" responses with exponential
-   backoff (2s → 4s → 8s), up to 3 attempts total. */
+function getStoredApiKey() {
+  return localStorage.getItem(APIKEY_STORAGE) || "";
+}
+
+/* ---------- Analysis panel: API key management ---------- */
+document.getElementById("saveKeyBtn").addEventListener("click", () => {
+  const key = document.getElementById("anthropicKeyInput").value.trim();
+  if (!key.startsWith("sk-ant-")) {
+    if ($analysisHint()) $analysisHint().textContent = "Μη έγκυρο κλειδί — πρέπει να αρχίζει με sk-ant-";
+    return;
+  }
+  localStorage.setItem(APIKEY_STORAGE, key);
+  document.getElementById("apikeyRow").style.display = "none";
+  document.getElementById("anthropicKeyInput").value = "";
+  if ($analysisHint()) $analysisHint().textContent = "✓ API key αποθηκεύτηκε.";
+});
+
+document.getElementById("clearKeyBtn").addEventListener("click", () => {
+  localStorage.removeItem(APIKEY_STORAGE);
+  document.getElementById("apikeyRow").style.display = "flex";
+  document.getElementById("anthropicKeyInput").value = "";
+  if ($analysisHint()) $analysisHint().textContent = "API key διαγράφηκε.";
+});
+
+document.getElementById("runAnalysisBtn").addEventListener("click", runPatternAnalysis);
+
+/* ---------- Pattern analysis ---------- */
+async function runPatternAnalysis() {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    $apikeyRow().style.display = "flex";
+    if ($analysisHint()) $analysisHint().textContent = "Χρειάζεται API key για να εκτελεστεί η ανάλυση.";
+    return;
+  }
+
+  const candles = _lastCandles;
+  if (!candles || candles.length < 10) {
+    if ($analysisHint()) $analysisHint().textContent = "Δεν υπάρχουν αρκετά δεδομένα για ανάλυση.";
+    return;
+  }
+
+  // Determine data window
+  const dataRangeVal = document.getElementById("dataRangeSelect").value;
+  let dataCandles = candles;
+  if (dataRangeVal === "half") dataCandles = candles.slice(-Math.floor(candles.length / 2));
+  else if (dataRangeVal === "quarter") dataCandles = candles.slice(-Math.floor(candles.length / 4));
+  else if (dataRangeVal === "custom" && analysisCustomRange) {
+    dataCandles = candles.slice(analysisCustomRange.startIdx, analysisCustomRange.endIdx + 1);
+  }
+
+  const analysisRangeVal = document.getElementById("analysisRangeSelect").value;
+  let analysisCandles = dataCandles;
+  if (analysisRangeVal === "last30") analysisCandles = dataCandles.slice(-Math.min(30, dataCandles.length));
+  else if (analysisRangeVal === "last50") analysisCandles = dataCandles.slice(-Math.min(50, dataCandles.length));
+  else if (analysisRangeVal === "last100") analysisCandles = dataCandles.slice(-Math.min(100, dataCandles.length));
+
+  const panel = $analysisPanel();
+  if ($analysisHint()) $analysisHint().textContent =
+    `Ανάλυση ${analysisCandles.length} candles...`;
+  panel.innerHTML = `<div class="analysis-spinner">🔍 Ανάλυση σε εξέλιξη...</div>`;
+
+  // Limit to 120 candles for the model
+  let modelCandles = analysisCandles;
+  if (analysisCandles.length > 120) {
+    const step = analysisCandles.length / 120;
+    modelCandles = Array.from({ length: 120 }, (_, i) => analysisCandles[Math.round(i * step)]);
+  }
+
+  const coinName = modalTitle.textContent.split(" —")[0].trim();
+  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const useTime = currentInterval === "1m" || currentInterval === "5m" || currentInterval === "1h";
+
+  const tsByCandle = {};
+  modelCandles.forEach(c => { tsByCandle[c[0]] = c; });
+
+  const ohlcSummary = modelCandles.map(c => {
+    const d = new Date(c[0]);
+    const label = useTime
+      ? d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" }) + " " +
+        d.toLocaleTimeString("el-GR", { hour:"2-digit", minute:"2-digit" })
+      : d.toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"2-digit" });
+    return `${c[0]}|${label}|${c[1].toFixed(2)}|${c[2].toFixed(2)}|${c[3].toFixed(2)}|${c[4].toFixed(2)}`;
+  }).join("\n");
+
+  const lastCandle = modelCandles[modelCandles.length - 1];
+  const lastPrice = lastCandle ? lastCandle[4].toFixed(2) : "άγνωστη";
+  const lastDate = lastCandle ? new Date(lastCandle[0]).toLocaleDateString("el-GR",
+    { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+
+  const userLines = manualLines.filter(l => !l.aiGenerated && l.includeInAnalysis !== false);
+  let userLinesSection = "";
+  if (userLines.length > 0) {
+    const sym = currencySymbol();
+    const lineDescs = userLines.map(l => {
+      const fmt = ts => new Date(ts).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+      if (l.type === "horizontal") return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y)}`;
+      if (l.type === "channel") return `• Κανάλι τάσης: (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)}), offset ${sym}${formatNumber(Math.abs(l.offset || 0))}`;
+      return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)})`;
+    }).join("\n");
+    userLinesSection = `\nΠαρατηρήσεις χρήστη:\n${lineDescs}\n`;
+  }
+
+  const prompt = `Είσαι ειδικός τεχνικής ανάλυσης κρυπτονομισμάτων. Αναλύεις OHLC δεδομένα για ${coinName} (interval: ${interval}, ${modelCandles.length} candles).
+
+Δεδομένα (timestamp_ms|ημ/ωρα|O|H|L|C):
+${ohlcSummary}
+
+Τελευταία τιμή: ${lastPrice} (${lastDate})
+${userLinesSection}
+Εντόπισε σχηματισμούς: γραμμές τάσης, τρίγωνα, W/M, στήριξη/αντίσταση, αναστροφές τάσης.
+Δώσε ΜΕΧΡΙ 6 ευρήματα. Για κάθε εύρημα: τύπο, σύντομη εξήγηση (1 πρόταση), timestamps, αξιοπιστία.${userLines.length > 0 ? " Αν κάποιο εύρημα σχετίζεται με γραμμή χρήστη, ανέφερέ το." : ""}
+
+Επίσης δώσε πρόβλεψη για 24 ώρες και 1 εβδομάδα.
+
+ΑΠΑΝΤΗΣΕ ΜΟΝΟ με έγκυρο JSON (χωρίς backticks):
+{"findings":[{"type":"trend|triangle|w_pattern|support|resistance|reversal","label":"...","explanation":"...","confidence":"high|medium|low","drawing":{"kind":"line|polygon|hline","timestamps":[ts1,ts2],"price":null}}],"summary":"...","forecast":{"h24":{"price":0.0,"direction":"up|down|sideways","note":"..."},"w1":{"price":0.0,"direction":"up|down|sideways","note":"..."}}}`;
+
+  try {
+    const data = await anthropicFetch(apiKey, {
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      messages: [{ role: "user", content: prompt }]
+    }, (attempt, delay) => {
+      if ($analysisHint()) $analysisHint().textContent = `Overloaded — προσπάθεια ${attempt+1}/3 σε ${delay/1000}δλ...`;
+    });
+
+    const text = data.content?.[0]?.text || "";
+    let parsed;
+    try {
+      let clean = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const jsonStart = clean.indexOf("{");
+      const jsonEnd = clean.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error("no JSON object found");
+      parsed = JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+    } catch (e) {
+      console.error("Raw model response:", text);
+      throw new Error(`Μη έγκυρη απάντηση JSON. (${e.message})`);
+    }
+
+    renderAnalysisResults(parsed, analysisCandles, tsByCandle, ohlcSummary, coinName, interval);
+    if ($analysisHint()) $analysisHint().textContent =
+      `✓ Βρέθηκαν ${parsed.findings?.length || 0} σχηματισμοί.`;
+
+  } catch (err) {
+    panel.innerHTML = `<div style="color:var(--red)">Σφάλμα ανάλυσης: ${err.message}</div>`;
+    if ($analysisHint()) $analysisHint().textContent = "";
+    console.error(err);
+  }
+}
 async function anthropicFetch(apiKey, body, onRetry) {
   const MAX_RETRIES = 3;
   let delay = 2000;
@@ -3611,6 +3757,30 @@ bigChartCanvas.addEventListener("click", (evt) => {
       autoSaveSession();
       modalHint.textContent = "Γραμμή διαγράφηκε. Κάνε κλικ σε άλλη γραμμή για διαγραφή.";
       refreshUserLineSelectionUI();
+    } else if (regressionLine) {
+      // Also check if user clicked near the regression line
+      const rp1 = regressionLine.points[0];
+      const rp2 = regressionLine.points[1];
+      const rx1 = bigChart.scales.x.getPixelForValue(rp1.x);
+      const ry1 = bigChart.scales.y.getPixelForValue(rp1.y);
+      const rx2 = bigChart.scales.x.getPixelForValue(rp2.x);
+      const ry2 = bigChart.scales.y.getPixelForValue(rp2.y);
+      const { chartArea } = bigChart;
+      const rSlope = (rx2 - rx1) !== 0 ? (ry2 - ry1) / (rx2 - rx1) : 0;
+      const rex1 = chartArea.left,  rey1 = ry1 + rSlope * (chartArea.left - rx1);
+      const rex2 = chartArea.right, rey2 = ry1 + rSlope * (chartArea.right - rx1);
+      const rdx = rex2 - rex1, rdy = rey2 - rey1;
+      const rlenSq = rdx*rdx + rdy*rdy;
+      const rt = rlenSq > 0 ? Math.max(0, Math.min(1, ((px-rex1)*rdx + (py-rey1)*rdy) / rlenSq)) : 0;
+      const rdist = Math.hypot(px - (rex1+rt*rdx), py - (rey1+rt*rdy));
+      if (rdist <= DELETE_HIT_PX) {
+        regressionLine = null;
+        regStatsEl.innerHTML = "";
+        bigChart.update();
+        modalHint.textContent = "Γραμμή παλινδρόμησης διαγράφηκε.";
+      } else {
+        modalHint.textContent = "Δεν βρέθηκε γραμμή κοντά στο σημείο. Δοκίμασε πιο κοντά.";
+      }
     } else {
       modalHint.textContent = "Δεν βρέθηκε γραμμή κοντά στο σημείο. Δοκίμασε πιο κοντά.";
     }

@@ -460,10 +460,10 @@
     </div>
     <div class="modal-tools">
       <select id="timeframeSelect" style="background:#1a1f2e;color:#f59e0b;border:1px solid #f59e0b;border-radius:6px;padding:0.3rem 0.5rem;font-size:0.85rem;cursor:pointer;">
-        <option value="1m|120" style="background:#1a1f2e;color:#f59e0b;">2ω (1λ)</option>
-        <option value="5m|288" style="background:#1a1f2e;color:#f59e0b;">24ω</option>
-        <option value="1h|168" style="background:#1a1f2e;color:#f59e0b;">7ημ</option>
-        <option value="1d|365" style="background:#1a1f2e;color:#f59e0b;">1έτος</option>
+        <option value="1m|120"    style="background:#1a1f2e;color:#f59e0b;">2ω (1λ)</option>
+        <option value="5m|288"    style="background:#1a1f2e;color:#f59e0b;">24ω</option>
+        <option value="30m|336"   style="background:#1a1f2e;color:#f59e0b;">7ημ</option>
+        <option value="6h|1460"   style="background:#1a1f2e;color:#f59e0b;">1έτος</option>
       </select>
       <div id="subIntervalToggle" style="display:none; gap:0.3rem;">
         <!-- filled dynamically per selected timeframe -->
@@ -754,8 +754,8 @@ const KRAKEN_INTERVAL_MAP = {
   "30m": 30,
   "1h":  60,
   "4h":  240,
-  "6h":  360,
-  "12h": 720,
+  "6h":  240,   // Kraken δεν υποστηρίζει 360 → fallback σε 4h
+  "12h": 1440,  // Kraken δεν υποστηρίζει 720 → fallback σε 1d
   "1d":  1440,
   "1w":  10080
 };
@@ -4390,11 +4390,9 @@ async function loadModalChart() {
       // coarser but supported interval: 4h (240min) covers up to 120 days,
       // 1d covers up to 720 days. Pick the finest interval that fits in 720.
       let effectiveInterval = currentInterval;
-      const windowMs = intervalMs * currentLimit;
-      if (windowMs > 720 * intervalMs) {
-        // Need more than 720 candles — use next coarser interval
-        if (currentInterval === "4h") effectiveInterval = "1d";
-      }
+      // Kraken returns max 720 candles per request.
+      // If we need more candles than that, use the already-mapped coarser interval.
+      // (KRAKEN_INTERVAL_MAP already maps 6h→240, 12h→1440 for unsupported intervals)
       const krakenInterval = KRAKEN_INTERVAL_MAP[effectiveInterval] || 60;
       // `since` in Unix seconds = start of desired window
       const sinceMs = Date.now() - (currentLimit * intervalMs);
@@ -4446,43 +4444,40 @@ async function loadCoinGeckoFallback() {
   let candles;
   const H = 60 * 60 * 1000;
   if (currentInterval === "1m") {
+    // 2ω: last 2 hours with 1-min candles
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    const oneHourAgo = Date.now() - H;
-    const recent = data.prices.filter(p => p[0] >= oneHourAgo);
-    candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-12), 5 * 60 * 1000, data.total_volumes);
-  } else if (currentInterval === "5m") {
-    // 24h with 5-min candles: market_chart days=1 gives ~5-min points
+    const twoHoursAgo = Date.now() - 2 * H;
+    const recent = data.prices.filter(p => p[0] >= twoHoursAgo);
+    candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-24), 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "5m" || currentInterval === "15m") {
+    // 24ω: 5λ ή 15λ candles από τελευταίο 24ωρο
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    candles = buildCandlesFromPrices(data.prices, 5 * 60 * 1000, data.total_volumes);
-  } else if (currentInterval === "1h" && currentLimit <= 168) {
-    // 7-day hourly: market_chart with days=7 gives hourly points
+    const bucketMs = currentInterval === "5m" ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
+  } else if (currentInterval === "30m" || currentInterval === "1h") {
+    // 7ημ: 30λ ή 1ω candles
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
-  } else if (currentInterval === "1h") {
-    // 30-day hourly: market_chart with days=30 gives hourly points
-    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=30`;
+    const bucketMs = currentInterval === "30m" ? 30 * 60 * 1000 : H;
+    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
+  } else if (currentInterval === "6h" || currentInterval === "12h" || currentInterval === "1d") {
+    // 1έτος: 6ω, 12ω ή 1ημ candles
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
-  } else if (currentInterval === "4h") {
-    // 6-month, 4h candles: build from daily market_chart (free API limit)
-    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=180&interval=daily`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    candles = buildCandlesFromPrices(data.prices, 4 * H, data.total_volumes);
+    const bucketMs = currentInterval === "6h" ? 6 * H : currentInterval === "12h" ? 12 * H : 24 * H;
+    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
   } else {
-    // 1-year daily
+    // Fallback: 1 year daily
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -4603,11 +4598,9 @@ function renderBigChart(candles) {
   }
 
   const timeUnit =
-    (currentInterval === "1m" || currentInterval === "5m" || currentInterval === "15m") ? "minute"
-    : (currentInterval === "30m") ? "hour"
-    : (currentInterval === "1h" && currentLimit <= 168) ? "hour"
-    : (currentInterval === "6h" || currentInterval === "12h") ? "day"
-    : "day";
+    ["1m","5m","15m"].includes(currentInterval) ? "minute"
+    : ["30m","1h"].includes(currentInterval)     ? "hour"
+    : "day"; // 6h, 12h, 1d → day labels
 
   // Display formats: date + time only, no day name
   const timeDisplayFormats = {

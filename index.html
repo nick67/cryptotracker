@@ -139,6 +139,8 @@
   .timeframe-toggle { display: flex; gap: 0.3rem; }
   .timeframe-toggle button { border-color: #f59e0b; color: #f59e0b; }
   .timeframe-toggle button.active { background: #f59e0b; border-color: #f59e0b; color: #0f1115; font-weight: 700; }
+  #subIntervalToggle button { font-size: 0.78rem; padding: 0.2rem 0.5rem; border-color: rgba(245,158,11,0.5); color: #f59e0b; }
+  #subIntervalToggle button.active { background: rgba(245,158,11,0.2); border-color: #f59e0b; font-weight: 700; }
   .modal-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; flex-shrink: 0; }
   .modal-tools .hint { color: var(--text-dim); font-size: 0.78rem; }
   .modal-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -445,7 +447,7 @@
 <footer>
   Σημείωση: το δωρεάν API του CoinGecko δεν παρέχει πραγματικό βιβλίο εντολών (bid/ask).
   Ως πλησιέστερα διαθέσιμα στοιχεία προσφοράς/ζήτησης εμφανίζονται το 24ω υψηλό και χαμηλό.
-  Αυτόματη ανανέωση κάθε 15 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
+  Αυτόματη ανανέωση κάθε 30 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
 </footer>
 
 <!-- CHART MODAL -->
@@ -457,13 +459,14 @@
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
     <div class="modal-tools">
-      <div class="timeframe-toggle" id="timeframeToggle">
-        <button data-interval="1m" data-limit="60" class="active">1ω (1λ)</button>
-        <button data-interval="5m" data-limit="288">24ω (5λ)</button>
-        <button data-interval="1h" data-limit="168">7ημ (1ω)</button>
-        <button data-interval="1h" data-limit="720">30ημ (1ω)</button>
-        <button data-interval="4h" data-limit="1080">6μ (4ω)</button>
-        <button data-interval="1d" data-limit="365">1έτος (1ημ)</button>
+      <select id="timeframeSelect" style="background:#1a1f2e;color:#f59e0b;border:1px solid #f59e0b;border-radius:6px;padding:0.3rem 0.5rem;font-size:0.85rem;cursor:pointer;">
+        <option value="1m|120" style="background:#1a1f2e;color:#f59e0b;">2ω (1λ)</option>
+        <option value="5m|288" style="background:#1a1f2e;color:#f59e0b;">24ω</option>
+        <option value="1h|168" style="background:#1a1f2e;color:#f59e0b;">7ημ</option>
+        <option value="1d|365" style="background:#1a1f2e;color:#f59e0b;">1έτος</option>
+      </select>
+      <div id="subIntervalToggle" style="display:none; gap:0.3rem;">
+        <!-- filled dynamically per selected timeframe -->
       </div>
       <button id="regressionBtn">📉 Γραμμική παλινδρόμηση</button>
       <button id="trendlineBtn">📈 Γραμμή τάσης (κλικ 2 σημείων)</button>
@@ -474,6 +477,8 @@
       <button id="deleteLinesBtn" style="border-color:#ef4444;color:#ef4444;">🗑 Διαγραφή γραμμής (κλικ)</button>
       <button id="clearLinesBtn" style="border-color:#ef4444;color:#ef4444;">✕ Καθαρισμός γραμμών</button>
       <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻ Ανανέωση</button>
+      <button id="autoRefreshBtn" title="Αυτόματη ανανέωση κάθε 15δλ" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
+      <button id="bookmarkBtn" title="Αποθήκευση bookmark" style="border-color:#f59e0b;color:#f59e0b;">🔖 Bookmark</button>
       <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢ Reset zoom</button>
       <button id="snapshotBtn">📸 Αποθήκευση</button>
       <button id="orderBookBtn">📶 Προσφορά/Ζήτηση</button>
@@ -545,6 +550,14 @@
         <span style="color:var(--text-dim); font-size:0.8rem;">Αποθηκευμένα:</span>
         <div id="savedAnalysesList" style="display:flex; gap:0.4rem; flex-wrap:wrap; flex:1;"></div>
         <button id="clearSavedBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem; color:var(--red); border-color:var(--red);">✕ Διαγραφή όλων</button>
+      </div>
+    </div>
+
+    <!-- Bookmarks bar -->
+    <div id="bookmarksWrap" style="display:none; flex-shrink:0; border-top:1px solid var(--border); padding:0.5rem 0 0;">
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span style="color:#f59e0b; font-size:0.78rem; white-space:nowrap;">🔖 Bookmarks:</span>
+        <div id="bookmarksList" style="display:flex; gap:0.4rem; flex-wrap:wrap; flex:1;"></div>
       </div>
     </div>
   </div>
@@ -625,28 +638,63 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const crosshairPlugin = {
   id: "crosshair",
   _x: null,
+  _y: null,
   afterEvent(chart, args) {
     if (chart !== bigChart) return;
     const evt = args.event;
     if (evt.type === "mousemove") {
       const pos = Chart.helpers.getRelativePosition(evt, chart);
       this._x = (pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right) ? pos.x : null;
+      this._y = (pos.y >= chart.chartArea.top  && pos.y <= chart.chartArea.bottom) ? pos.y : null;
     } else if (evt.type === "mouseout") {
       this._x = null;
+      this._y = null;
     }
-    args.changed = true; // force redraw
+    args.changed = true;
   },
   afterDatasetsDraw(chart) {
-    if (chart !== bigChart || this._x === null) return;
-    const { ctx, chartArea } = chart;
+    if (chart !== bigChart) return;
+    const { ctx, chartArea, scales } = chart;
+
+    // Draw flags
+    drawChartFlags(chart);
+
+    if (this._x === null) return;
+
     ctx.save();
-    ctx.beginPath();
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = "rgba(200,200,200,0.4)";
     ctx.lineWidth = 1;
+
+    // Vertical crosshair
+    ctx.beginPath();
     ctx.moveTo(this._x, chartArea.top);
     ctx.lineTo(this._x, chartArea.bottom);
     ctx.stroke();
+
+    // Horizontal crosshair (feature #5)
+    if (this._y !== null) {
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, this._y);
+      ctx.lineTo(chartArea.right, this._y);
+      ctx.stroke();
+
+      // Y-axis price label
+      const price = scales.y.getValueForPixel(this._y);
+      const priceText = currencySymbol() + formatNumber(price);
+      ctx.setLineDash([]);
+      ctx.font = "bold 11px sans-serif";
+      const pw = ctx.measureText(priceText).width + 8;
+      const boxX = chartArea.left - pw;
+      const boxY = this._y - 10;
+      ctx.fillStyle = "rgba(60,70,90,0.92)";
+      ctx.fillRect(boxX, boxY, pw, 20);
+      ctx.fillStyle = "#e8eaed";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(priceText, boxX + pw / 2, this._y);
+    }
+
     ctx.restore();
   }
 };
@@ -702,8 +750,12 @@ const KRAKEN_BASE = "https://api.kraken.com/0/public";
 const KRAKEN_INTERVAL_MAP = {
   "1m":  1,
   "5m":  5,
+  "15m": 15,
+  "30m": 30,
   "1h":  60,
   "4h":  240,
+  "6h":  360,
+  "12h": 720,
   "1d":  1440,
   "1w":  10080
 };
@@ -2114,9 +2166,15 @@ async function fetchMarketDataFor(ids, retries = 2) {
     const res = await fetch(url);
 
     if (res.status === 429) {
-      // Rate limited — wait and retry
-      if (retries > 0) {
+      // Rate limited — show cached data immediately, then retry
+      if (attempt === 1) {
+        const cached = watchlist.map(id => latestMarketData[id]).filter(Boolean);
+        if (cached.length > 0 && typeof renderCards === 'function') {
+          renderCards(cached); // keep UI populated during wait
+        }
         statusEl.textContent = "Rate limit CoinGecko — επαναπροσπάθεια σε 8 δλ...";
+      }
+      if (retries > 0) {
         await new Promise(r => setTimeout(r, 8000));
         return fetchMarketDataFor(ids, retries - 1);
       }
@@ -2204,13 +2262,12 @@ const HIT_RADIUS_PX = 10;
 
 document.getElementById("closeModalBtn").addEventListener("click", closeChartModal);
 
-document.getElementById("timeframeToggle").addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  document.querySelectorAll("#timeframeToggle button").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  currentInterval = btn.dataset.interval;
-  currentLimit = parseInt(btn.dataset.limit, 10);
+document.getElementById("timeframeSelect").addEventListener("change", (e) => {
+  const [interval, limit] = e.target.value.split("|");
+  currentInterval = interval;
+  currentLimit = parseInt(limit);
+  const label = e.target.options[e.target.selectedIndex].text;
+  updateSubIntervalRow(label);
   resetDrawings();
   loadModalChart();
 });
@@ -2258,6 +2315,119 @@ document.getElementById("modalRefreshBtn").addEventListener("click", () => {
   loadModalChart();
 });
 
+/* ---- Sub-interval selector ---- */
+// Map from main timeframe key → available sub-intervals [label, interval, limit]
+const SUB_INTERVALS = {
+  "24ω":    [["5λ","5m",288], ["15λ","15m",96]],
+  "7ημ":    [["30λ","30m",336], ["1ω","1h",168]],
+  "1έτος":  [["6ω","6h",1460], ["12ω","12h",730], ["1ημ","1d",365]]
+};
+
+function updateSubIntervalRow(mainLabel) {
+  const row = document.getElementById("subIntervalToggle");
+  const subs = SUB_INTERVALS[mainLabel];
+  if (!subs) { row.style.display = "none"; row.innerHTML = ""; return; }
+
+  row.innerHTML = subs.map(([label, interval, limit], i) =>
+    `<button class="${i===0?'active':''}" data-interval="${interval}" data-limit="${limit}">${label}</button>`
+  ).join("");
+  row.style.display = "flex";
+
+  // Apply first sub-interval as default
+  currentInterval = subs[0][1];
+  currentLimit = subs[0][2];
+
+  row.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      row.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentInterval = btn.dataset.interval;
+      currentLimit = parseInt(btn.dataset.limit);
+      resetDrawings();
+      loadModalChart();
+    });
+  });
+}
+
+/* ---- Auto-refresh ---- */
+let modalAutoRefreshTimer = null;
+let modalAutoRefreshActive = false;
+
+document.getElementById("autoRefreshBtn").addEventListener("click", () => {
+  modalAutoRefreshActive = !modalAutoRefreshActive;
+  const btn = document.getElementById("autoRefreshBtn");
+  if (modalAutoRefreshActive) {
+    btn.style.color = "#22c55e";
+    btn.title = "Αυτόματη ανανέωση ΕΝΕΡΓΗ (κάθε 15δλ) — κλικ για απενεργοποίηση";
+    modalAutoRefreshTimer = setInterval(() => {
+      if (bigChart && chartModal.classList.contains("open")) loadModalChart();
+    }, 15000);
+  } else {
+    btn.style.color = "var(--text-dim)";
+    btn.title = "Αυτόματη ανανέωση κάθε 15δλ";
+    clearInterval(modalAutoRefreshTimer);
+    modalAutoRefreshTimer = null;
+  }
+});
+
+/* ---- Bookmarks ---- */
+/* ---- Chart flags (⚑ markers at specific price/time points) ---- */
+let chartFlags = []; // [{id, x (timestamp), y (price), label}]
+
+// bookmarkBtn = flag placement tool toggle
+document.getElementById("bookmarkBtn").addEventListener("click", () => {
+  setActiveTool(activeTool === "flag" ? null : "flag");
+});
+
+// Draw flags in manualLinesPlugin equivalent (added to crosshair plugin extension)
+function drawChartFlags(chart) {
+  if (!chartFlags.length) return;
+  const { ctx, chartArea, scales } = chart;
+  chartFlags.forEach(flag => {
+    const xPx = scales.x.getPixelForValue(flag.x);
+    const yPx = scales.y.getPixelForValue(flag.y);
+    if (xPx < chartArea.left || xPx > chartArea.right) return;
+    if (yPx < chartArea.top  || yPx > chartArea.bottom) return;
+
+    const color = flag.color || "#22c55e";
+    const stemH = 50;
+
+    ctx.save();
+    // Vertical stem
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.moveTo(xPx, yPx);
+    ctx.lineTo(xPx, yPx - stemH);
+    ctx.stroke();
+    // Flag triangle (wider + taller)
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(xPx, yPx - stemH);
+    ctx.lineTo(xPx + 52, yPx - stemH + 11);
+    ctx.lineTo(xPx, yPx - stemH + 22);
+    ctx.closePath();
+    ctx.fill();
+    // Price text inside flag
+    const displayText = flag.label || flag.priceLabel || "";
+    if (displayText) {
+      ctx.font = "bold 10px sans-serif";
+      ctx.fillStyle = "#0f1115";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(displayText.slice(0, 12), xPx + 3, yPx - stemH + 11);
+    }
+    // Circle at base
+    ctx.beginPath();
+    ctx.arc(xPx, yPx, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+
 document.getElementById("resetZoomBtn").addEventListener("click", () => {
   if (bigChart) {
     // Clear manual y-axis override so it autoscales again
@@ -2294,8 +2464,9 @@ document.getElementById("snapshotBtn").addEventListener("click", async () => {
   if (!bigChart) return;
 
   const coinTitle = document.getElementById("modalTitle").textContent;
-  const timeframeBtn = document.querySelector("#timeframeToggle button.active");
-  const timeframe = timeframeBtn ? timeframeBtn.textContent.trim() : "";
+  const sel = document.getElementById("timeframeSelect");
+  const subBtn = document.querySelector("#subIntervalToggle button.active");
+  const timeframe = (sel?.options[sel?.selectedIndex]?.text || "") + (subBtn ? " / " + subBtn.textContent.trim() : "");
   const dateStr = new Date().toLocaleString("el-GR", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit"
@@ -2658,7 +2829,7 @@ async function runPatternAnalysis() {
   }
 
   const coinName = modalTitle.textContent.split(" —")[0].trim();
-  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const interval = document.getElementById("timeframeSelect")?.options[document.getElementById("timeframeSelect")?.selectedIndex]?.text || "";
   const useTime = currentInterval === "1m" || currentInterval === "5m" || currentInterval === "1h";
 
   const tsByCandle = {};
@@ -3045,7 +3216,7 @@ document.getElementById("manualSaveBtn").addEventListener("click", () => {
   }
 
   const coinName = modalTitle.textContent.split(" —")[0].trim();
-  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const interval = document.getElementById("timeframeSelect")?.options[document.getElementById("timeframeSelect")?.selectedIndex]?.text || "";
   const defaultName = `${coinName} ${new Date().toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" })}`;
   const name = window.prompt("Όνομα αποθήκευσης:", defaultName);
   if (name === null) return; // user cancelled
@@ -3283,29 +3454,36 @@ function setActiveTool(tool) {
   document.getElementById("hlineBtn").classList.toggle("active", tool === "hline");
   document.getElementById("editLinesBtn").classList.toggle("active", tool === "edit");
   document.getElementById("deleteLinesBtn").classList.toggle("active", tool === "delete");
+  document.getElementById("bookmarkBtn").classList.toggle("active", tool === "flag");
 
-  // Disable pan/zoom while a drawing tool is active
+  // Lock pan/zoom while a drawing tool or edit is active (feature #3)
   if (bigChart?.options?.plugins?.zoom) {
-    bigChart.options.plugins.zoom.pan.enabled = (tool === null);
+    const drawingActive = tool !== null;
+    bigChart.options.plugins.zoom.pan.enabled = !drawingActive;
     bigChart.options.plugins.zoom.zoom.wheel.enabled = true;
     bigChart.update("none");
   }
 
+  const cursorWhite = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+
   if (tool === "trend") {
     modalHint.textContent = "Κάνε κλικ σε δύο σημεία για τη γραμμή τάσης.";
-    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+    bigChartCanvas.style.cursor = cursorWhite;
   } else if (tool === "channel") {
     modalHint.textContent = "Κλικ 1: πρώτο άκρο της κεντρικής γραμμής.";
-    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+    bigChartCanvas.style.cursor = cursorWhite;
   } else if (tool === "hline") {
     modalHint.textContent = "Κάνε κλικ σε ένα σημείο για να σχεδιάσεις οριζόντια γραμμή.";
-    bigChartCanvas.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/>%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/>%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/>%3C/svg%3E\") 10 10, crosshair";
+    bigChartCanvas.style.cursor = cursorWhite;
   } else if (tool === "edit") {
-    modalHint.textContent = "Σύρε τα άκρα μιας γραμμής για να τη μετακινήσεις ή να την επεκτείνεις.";
+    modalHint.textContent = "Σύρε τα άκρα μιας γραμμής (το διάγραμμα είναι κλειδωμένο).";
     bigChartCanvas.style.cursor = "default";
   } else if (tool === "delete") {
     modalHint.textContent = "Κάνε κλικ πάνω σε μία γραμμή για να τη διαγράψεις.";
     bigChartCanvas.style.cursor = "pointer";
+  } else if (tool === "flag") {
+    modalHint.textContent = "Κλικ=πράσινο flag · Shift+κλικ=κόκκινο · Alt+κλικ=με ετικέτα.";
+    bigChartCanvas.style.cursor = cursorWhite;
   } else {
     modalHint.textContent = "Scroll για zoom · σύρε για pan";
     bigChartCanvas.style.cursor = "default";
@@ -3317,6 +3495,7 @@ function resetDrawings() {
   const filterRow = $patternFilterRow();
   if (filterRow) filterRow.style.display = "none";
   manualLines = [];
+  chartFlags = [];
   regressionLine = null;
   trendlinePoints = [];
   channelOffset = null;
@@ -3330,6 +3509,7 @@ function resetDrawings() {
   document.getElementById("hlineBtn").classList.remove("active");
   document.getElementById("editLinesBtn").classList.remove("active");
   document.getElementById("deleteLinesBtn").classList.remove("active");
+  document.getElementById("bookmarkBtn").classList.remove("active");
   modalHint.textContent = "";
   regStatsEl.innerHTML = "";
   refreshUserLineSelectionUI();
@@ -3633,8 +3813,8 @@ const manualLinesPlugin = {
         const color = line.aiColor || (line.type === "horizontal" ? "#a78bfa" : "#ffb454");
         const px = drawExtendedLine(line.p1, line.p2, color, line.aiGenerated ? [6,3] : null);
 
-        // ±3% deviation band for user-drawn trend lines (not horizontal, not AI)
-        if (!line.aiGenerated && line.type === "trend") {
+        // ±0.1% deviation band for user-drawn trend and horizontal lines (not AI)
+        if (!line.aiGenerated && (line.type === "trend" || line.type === "horizontal")) {
           drawDeviationBand(line.p1, line.p2);
         }
 
@@ -3762,6 +3942,17 @@ function pixelDistance(px1, py1, px2, py2) {
 bigChartCanvas.addEventListener("click", (evt) => {
   if (!bigChart) return;
 
+  // Flag placement tool
+  if (activeTool === "flag") {
+    const { x, y } = dataCoordsFromEvent(evt);
+    const color = evt.shiftKey ? "#ef4444" : "#22c55e"; // Shift=red, normal=green
+    const label = evt.altKey ? (window.prompt("Ετικέτα flag:", "") || "") : "";
+    const priceLabel = currencySymbol() + formatNumber(y);
+    chartFlags.push({ id: Date.now(), x, y, color, label, priceLabel });
+    bigChart.update();
+    return;
+  }
+
   if (activeTool === "delete") {
     const { px, py } = dataCoordsFromEvent(evt);
     const DELETE_HIT_PX = 8;
@@ -3836,6 +4027,25 @@ bigChartCanvas.addEventListener("click", (evt) => {
     } else {
       modalHint.textContent = "Δεν βρέθηκε γραμμή κοντά στο σημείο. Δοκίμασε πιο κοντά.";
     }
+
+    // Also check flags — click near stem base or triangle
+    const flagIdx = chartFlags.findIndex(flag => {
+      const fxPx = bigChart.scales.x.getPixelForValue(flag.x);
+      const fyPx = bigChart.scales.y.getPixelForValue(flag.y);
+      // Hit area: stem (vertical line) + triangle area (52×22px above stem top)
+      const stemTop = fyPx - 50;
+      // Near stem
+      if (Math.abs(px - fxPx) <= DELETE_HIT_PX && py >= stemTop && py <= fyPx) return true;
+      // Inside triangle bounding box
+      if (px >= fxPx && px <= fxPx + 52 && py >= stemTop && py <= stemTop + 22) return true;
+      return false;
+    });
+    if (flagIdx !== -1) {
+      chartFlags.splice(flagIdx, 1);
+      bigChart.update();
+      modalHint.textContent = "Flag διαγράφηκε.";
+    }
+
     return;
   }
 
@@ -4120,16 +4330,26 @@ function openChartModal(coinId, name, symbol) {
   modalTitle.textContent = `${name} (${symbol.toUpperCase()}) — Candlestick (${sourceLabel})`;
 
   resetDrawings();
-  document.querySelectorAll("#timeframeToggle button").forEach(b => b.classList.remove("active"));
-  document.querySelector('#timeframeToggle button[data-interval="1m"]').classList.add("active");
+  const sel = document.getElementById("timeframeSelect");
+  if (sel) sel.selectedIndex = 0; // reset to first option (2ω)
   currentInterval = "1m";
-  currentLimit = 60;
+  currentLimit = 120;
+  document.getElementById("subIntervalToggle").style.display = "none";
+  document.getElementById("subIntervalToggle").innerHTML = "";
   chartModal.classList.add("open");
   loadModalChart();
 }
 
 function closeChartModal() {
   chartModal.classList.remove("open");
+  // Stop auto-refresh
+  if (modalAutoRefreshTimer) {
+    clearInterval(modalAutoRefreshTimer);
+    modalAutoRefreshTimer = null;
+    modalAutoRefreshActive = false;
+    const arBtn = document.getElementById("autoRefreshBtn");
+    if (arBtn) { arBtn.style.color = "var(--text-dim)"; }
+  }
   if (bigChart) {
     bigChart.destroy();
     bigChart = null;
@@ -4164,7 +4384,7 @@ async function loadModalChart() {
       // `since` parameter so we always get the correct time window regardless
       // of how many candles that produces.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "1h": 3600e3, "4h": 4*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
       }[currentInterval] || 3600e3;
       // Kraken max 720 candles/request. For windows > 720 candles, use a
       // coarser but supported interval: 4h (240min) covers up to 120 days,
@@ -4191,7 +4411,7 @@ async function loadModalChart() {
       const symbol = BINANCE_SYMBOL_MAP[currentModalCoinId];
       // Binance limit max is 1000. For larger ranges, use startTime instead.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "1h": 3600e3, "4h": 4*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
       }[currentInterval] || 3600e3;
       let url;
       if (currentLimit <= 1000) {
@@ -4382,11 +4602,12 @@ function renderBigChart(candles) {
     xMax = last + step * 4; // ~4 extra bars of breathing room
   }
 
-  const timeUnit = (currentInterval === "1m" || currentInterval === "5m") ? "minute"
-    : (currentInterval === "1h" && currentLimit <= 168) ? "hour"  // 7ημ → ώρα
-    : (currentInterval === "1h" && currentLimit > 168) ? "day"   // 30ημ → ημέρα
-    : currentInterval === "4h" ? "day"                            // 6μ → ημέρα
-    : "day";                                                      // 1έτος → ημέρα
+  const timeUnit =
+    (currentInterval === "1m" || currentInterval === "5m" || currentInterval === "15m") ? "minute"
+    : (currentInterval === "30m") ? "hour"
+    : (currentInterval === "1h" && currentLimit <= 168) ? "hour"
+    : (currentInterval === "6h" || currentInterval === "12h") ? "day"
+    : "day";
 
   // Display formats: date + time only, no day name
   const timeDisplayFormats = {
@@ -4498,7 +4719,7 @@ renderBigChart = function(candles) {
 function autoSaveSession() {
   if (!currentModalCoinId || !_lastCandles.length) return;
   const coinName = modalTitle.textContent.split(" —")[0].trim();
-  const interval = document.querySelector("#timeframeToggle button.active")?.textContent || "";
+  const interval = document.getElementById("timeframeSelect")?.options[document.getElementById("timeframeSelect")?.selectedIndex]?.text || "";
   const sessionKey = `session|${currentModalCoinId}|${interval}`;
 
   const entry = {
@@ -4576,7 +4797,7 @@ function computeRegression() {
   document.getElementById("txDateInput").value = today;
 })();
 loadData();
-setInterval(loadData, 15000);
+setInterval(loadData, 30000); // 30s — avoids CoinGecko rate limits (30 req/min)
 
 // Silent auto-sync on load, if configured
 (function initAutoSync() {

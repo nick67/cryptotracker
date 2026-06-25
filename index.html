@@ -459,30 +459,45 @@
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
     <div class="modal-tools">
-      <select id="timeframeSelect" style="background:#1a1f2e;color:#f59e0b;border:1px solid #f59e0b;border-radius:6px;padding:0.3rem 0.5rem;font-size:0.85rem;cursor:pointer;">
-        <option value="1m|120"    style="background:#1a1f2e;color:#f59e0b;">2ω (1λ)</option>
-        <option value="5m|288"    style="background:#1a1f2e;color:#f59e0b;">24ω</option>
-        <option value="30m|336"   style="background:#1a1f2e;color:#f59e0b;">7ημ</option>
-        <option value="6h|1460"   style="background:#1a1f2e;color:#f59e0b;">1έτος</option>
+      <!-- Timeframe dropdown (πορτοκαλί) -->
+      <select id="timeframeSelect" style="background:#1a1f2e;color:#f97316;border:1px solid #f97316;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;">
+        <option value="1m|120"  style="background:#1a1f2e;color:#f97316;">⏱ 2ω / 1λ</option>
+        <option value="15m|96"  style="background:#1a1f2e;color:#f97316;">⏱ 24ω / 15λ</option>
+        <option value="1h|168"  style="background:#1a1f2e;color:#f97316;">⏱ 7ημ / 1ω</option>
+        <option value="1d|365"  style="background:#1a1f2e;color:#f97316;">⏱ 1έτος / 1ημ</option>
       </select>
-      <div id="subIntervalToggle" style="display:none; gap:0.3rem;">
-        <!-- filled dynamically per selected timeframe -->
-      </div>
-      <button id="regressionBtn">📉 Γραμμική παλινδρόμηση</button>
-      <button id="trendlineBtn">📈 Γραμμή τάσης (κλικ 2 σημείων)</button>
-      <button id="channelBtn">📊 Κανάλι τάσης (κλικ 2 σημείων)</button>
-      <button id="hlineBtn">➖ Οριζόντια γραμμή (κλικ 1 σημείου)</button>
-      <button id="toggleLinesBtn" title="Εμφάνιση/απόκρυψη γραμμών" style="border-color:#a78bfa;color:#a78bfa;">👁 Γραμμές</button>
-      <button id="editLinesBtn">✥ Μετακίνηση/επέκταση γραμμών</button>
-      <button id="deleteLinesBtn" style="border-color:#ef4444;color:#ef4444;">🗑 Διαγραφή γραμμής (κλικ)</button>
-      <button id="clearLinesBtn" style="border-color:#ef4444;color:#ef4444;">✕ Καθαρισμός γραμμών</button>
-      <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻ Ανανέωση</button>
-      <button id="autoRefreshBtn" title="Αυτόματη ανανέωση κάθε 15δλ" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
-      <button id="bookmarkBtn" title="Αποθήκευση bookmark" style="border-color:#f59e0b;color:#f59e0b;">🔖 Bookmark</button>
-      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢ Reset zoom</button>
-      <button id="snapshotBtn">📸 Αποθήκευση</button>
-      <button id="orderBookBtn">📶 Προσφορά/Ζήτηση</button>
-      <button id="analyzeBtn">🤖 Ανάλυση σχηματισμών</button>
+
+      <!-- Drawing tools dropdown (μωβ) -->
+      <select id="drawingToolSelect" style="background:#1a1f2e;color:#a78bfa;border:1px solid #a78bfa;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;">
+        <option value="" style="background:#1a1f2e;color:#a78bfa;">✏ Εργαλεία</option>
+        <option value="regression" style="background:#1a1f2e;color:#a78bfa;">📉 Παλινδρόμηση</option>
+        <option value="trend"      style="background:#1a1f2e;color:#a78bfa;">📈 Γραμμή τάσης</option>
+        <option value="channel"    style="background:#1a1f2e;color:#a78bfa;">📊 Κανάλι τάσης</option>
+        <option value="hline"      style="background:#1a1f2e;color:#a78bfa;">➖ Οριζόντια γραμμή</option>
+        <option value="toggleLines"style="background:#1a1f2e;color:#a78bfa;">👁 Εμφάνιση/απόκρυψη</option>
+        <option value="edit"       style="background:#1a1f2e;color:#a78bfa;">✥ Μετακίνηση</option>
+        <option value="delete"     style="background:#1a1f2e;color:#a78bfa;">🗑 Διαγραφή γραμμής</option>
+        <option value="clear"      style="background:#1a1f2e;color:#a78bfa;">✕ Καθαρισμός όλων</option>
+      </select>
+      <!-- Hidden original buttons (still needed for JS handlers) -->
+      <span style="display:none;">
+        <button id="regressionBtn"></button>
+        <button id="trendlineBtn"></button>
+        <button id="channelBtn"></button>
+        <button id="hlineBtn"></button>
+        <button id="toggleLinesBtn"></button>
+        <button id="editLinesBtn"></button>
+        <button id="deleteLinesBtn"></button>
+        <button id="clearLinesBtn"></button>
+      </span>
+
+      <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻</button>
+      <button id="autoRefreshBtn" title="Αυτόματη ανανέωση" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
+      <button id="bookmarkBtn" title="Flag στο διάγραμμα" style="border-color:#6b7280;color:#9aa1ac;">🔖 Flag</button>
+      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢</button>
+      <button id="snapshotBtn" style="border-color:#6b7280;color:#9aa1ac;">📸</button>
+      <button id="orderBookBtn">📶 Βιβλίο</button>
+      <button id="analyzeBtn">🤖 Ανάλυση</button>
       <span class="hint" id="modalHint"></span>
     </div>
 
@@ -2262,14 +2277,33 @@ const HIT_RADIUS_PX = 10;
 
 document.getElementById("closeModalBtn").addEventListener("click", closeChartModal);
 
+// Timeframe dropdown
 document.getElementById("timeframeSelect").addEventListener("change", (e) => {
   const [interval, limit] = e.target.value.split("|");
   currentInterval = interval;
   currentLimit = parseInt(limit);
-  const label = e.target.options[e.target.selectedIndex].text;
-  updateSubIntervalRow(label);
   resetDrawings();
   loadModalChart();
+});
+
+// Drawing tools dropdown — maps option values to existing button click handlers
+document.getElementById("drawingToolSelect").addEventListener("change", (e) => {
+  const val = e.target.value;
+  e.target.selectedIndex = 0; // always reset to placeholder after action
+  if (!val) return;
+  if (val === "regression")    { computeRegression(); }
+  else if (val === "trend")    { setActiveTool(activeTool === "trend"    ? null : "trend"); }
+  else if (val === "channel")  { setActiveTool(activeTool === "channel"  ? null : "channel"); }
+  else if (val === "hline")    { setActiveTool(activeTool === "hline"    ? null : "hline"); }
+  else if (val === "edit")     { setActiveTool(activeTool === "edit"     ? null : "edit"); }
+  else if (val === "delete")   { setActiveTool(activeTool === "delete"   ? null : "delete"); }
+  else if (val === "clear")    { resetDrawings(); renderBigChart(); }
+  else if (val === "toggleLines") {
+    linesVisible = !linesVisible;
+    const btn = document.getElementById("toggleLinesBtn");
+    if (btn) { btn.style.opacity = linesVisible ? "1" : "0.4"; btn.textContent = linesVisible ? "👁 Γραμμές" : "🚫 Γραμμές"; }
+    if (bigChart) bigChart.update();
+  }
 });
 
 document.getElementById("trendlineBtn").addEventListener("click", () => {
@@ -2317,37 +2351,6 @@ document.getElementById("modalRefreshBtn").addEventListener("click", () => {
 
 /* ---- Sub-interval selector ---- */
 // Map from main timeframe key → available sub-intervals [label, interval, limit]
-const SUB_INTERVALS = {
-  "24ω":    [["5λ","5m",288], ["15λ","15m",96]],
-  "7ημ":    [["30λ","30m",336], ["1ω","1h",168]],
-  "1έτος":  [["6ω","6h",1460], ["12ω","12h",730], ["1ημ","1d",365]]
-};
-
-function updateSubIntervalRow(mainLabel) {
-  const row = document.getElementById("subIntervalToggle");
-  const subs = SUB_INTERVALS[mainLabel];
-  if (!subs) { row.style.display = "none"; row.innerHTML = ""; return; }
-
-  row.innerHTML = subs.map(([label, interval, limit], i) =>
-    `<button class="${i===0?'active':''}" data-interval="${interval}" data-limit="${limit}">${label}</button>`
-  ).join("");
-  row.style.display = "flex";
-
-  // Apply first sub-interval as default
-  currentInterval = subs[0][1];
-  currentLimit = subs[0][2];
-
-  row.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      row.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentInterval = btn.dataset.interval;
-      currentLimit = parseInt(btn.dataset.limit);
-      resetDrawings();
-      loadModalChart();
-    });
-  });
-}
 
 /* ---- Auto-refresh ---- */
 let modalAutoRefreshTimer = null;
@@ -2464,9 +2467,8 @@ document.getElementById("snapshotBtn").addEventListener("click", async () => {
   if (!bigChart) return;
 
   const coinTitle = document.getElementById("modalTitle").textContent;
-  const sel = document.getElementById("timeframeSelect");
-  const subBtn = document.querySelector("#subIntervalToggle button.active");
-  const timeframe = (sel?.options[sel?.selectedIndex]?.text || "") + (subBtn ? " / " + subBtn.textContent.trim() : "");
+  const sel2 = document.getElementById("timeframeSelect");
+  const timeframe = sel2?.options[sel2?.selectedIndex]?.text?.replace(/⏱\s*/,"") || "";
   const dateStr = new Date().toLocaleString("el-GR", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit"
@@ -4331,11 +4333,9 @@ function openChartModal(coinId, name, symbol) {
 
   resetDrawings();
   const sel = document.getElementById("timeframeSelect");
-  if (sel) sel.selectedIndex = 0; // reset to first option (2ω)
+  if (sel) sel.selectedIndex = 0;
   currentInterval = "1m";
   currentLimit = 120;
-  document.getElementById("subIntervalToggle").style.display = "none";
-  document.getElementById("subIntervalToggle").innerHTML = "";
   chartModal.classList.add("open");
   loadModalChart();
 }

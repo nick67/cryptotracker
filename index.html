@@ -4114,6 +4114,13 @@ bigChartCanvas.addEventListener("click", (evt) => {
 bigChartCanvas.addEventListener("mousedown", (evt) => {
   if (!bigChart) return;
 
+  // Block the zoom plugin's pan from starting whenever a drawing tool
+  // is active — it registers its own mousedown listener on the same
+  // canvas, so we must stop propagation before it fires.
+  if (activeTool !== null) {
+    evt.stopImmediatePropagation();
+  }
+
   // Vertical scale drag: mousedown over the y-axis label area (left of
   // chartArea) rescales the price axis, independent of drawing tools.
   const posForAxis = Chart.helpers.getRelativePosition(evt, bigChart);
@@ -4183,6 +4190,11 @@ bigChartCanvas.addEventListener("mousedown", (evt) => {
 
 bigChartCanvas.addEventListener("mousemove", (evt) => {
   if (!bigChart) return;
+
+  // During a line drag, stop zoom plugin from also processing the move
+  if (dragState !== null) {
+    evt.stopImmediatePropagation();
+  }
 
   // Vertical scale drag: rescale the price axis around its center
   if (yAxisDragState) {

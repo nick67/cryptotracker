@@ -3302,59 +3302,113 @@ function renderSavedAnalysesList() {
 }
 
 function loadSavedAnalysis(entry) {
-  // Make sure the modal is open for the right coin if possible
   const panel = $analysisPanel();
   const apikeyRow = $apikeyRow();
   const rangeRow = document.getElementById("analysisRangeRow");
 
-  // Show analysis panel
-  panel.classList.add("open");
-  panel.classList.remove("minimized");
-  document.getElementById("analysisPanelBar").style.display = "flex";
-  setMinimizeButtonState(false);
-  apikeyRow.style.display = "none";
-  rangeRow.style.display = "flex";
-  document.getElementById("analyzeBtn").classList.add("active");
+  // Helper that applies lines + report after the chart is ready
+  function applyEntry() {
+    panel.classList.add("open");
+    panel.classList.remove("minimized");
+    document.getElementById("analysisPanelBar").style.display = "flex";
+    setMinimizeButtonState(false);
+    apikeyRow.style.display = "none";
+    rangeRow.style.display = "flex";
+    document.getElementById("analyzeBtn").classList.add("active");
 
-  // Restore all lines (user-drawn + AI) from savedLines if available
-  manualLines = [];
-  hiddenPatternTypes.clear();
+    // Restore lines
+    manualLines = [];
+    hiddenPatternTypes.clear();
 
-  if (entry.savedLines && entry.savedLines.length > 0) {
-    // Restore directly — savedLines already has full p1/p2/type/color data
-    manualLines = entry.savedLines.map(l => ({ ...l, id: ++lineIdCounter }));
-    if (bigChart) bigChart.update();
-  } else if (entry.findings && entry.candles && entry.tsByCandle) {
-    // Fallback: reconstruct AI lines via shared helper
-    applyFindingsToChart(entry.findings, entry.tsByCandle, entry.candles);
-    if (bigChart) bigChart.update();
+    if (entry.savedLines && entry.savedLines.length > 0) {
+      manualLines = entry.savedLines.map(l => ({ ...l, id: ++lineIdCounter }));
+      if (bigChart) bigChart.update();
+    } else if (entry.findings && entry.candles && entry.tsByCandle) {
+      applyFindingsToChart(entry.findings, entry.tsByCandle, entry.candles);
+      if (bigChart) bigChart.update();
+    }
+
+    if (entry.candles?.length) _lastCandles = entry.candles;
+
+    panel.innerHTML = entry.reportHtml ||
+      (entry.isSession
+        ? `<div style="color:var(--text-dim);padding:0.5rem 0;">Session — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} γραμμές επαναφορτώθηκαν.</div>`
+        : entry.isNamed
+        ? `<div style="color:var(--text-dim);padding:0.5rem 0;">«${entry.name}» — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} γραμμές επαναφορτώθηκαν.</div>`
+        : "<div style='color:var(--text-dim)'>Αποθηκευμένη ανάλυση.</div>");
+
+    _chatOhlcSummary = entry.ohlcSummaryForChat || "";
+    _chatCoinName = entry.coinName || "";
+    _chatInterval = entry.interval || "";
+    _chatHistory = [];
+
+    const dateStr = new Date(entry.date).toLocaleString("el-GR",
+      { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+    $analysisHint().textContent =
+      `↩ Φορτώθηκε: ${entry.coinName} · ${entry.interval} · ${dateStr}`;
+
+    refreshUserLineSelectionUI();
+    renderSavedAnalysesList();
   }
 
-  // Restore report HTML (empty for sessions/named saves without an AI report)
-  panel.innerHTML = entry.reportHtml ||
-    (entry.isSession
-      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">Session αποθηκευμένο — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
-      : entry.isNamed
-      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">«${entry.name}» — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
-      : "<div style='color:var(--text-dim)'>Αποθηκευμένη ανάλυση.</div>");
-
-  // Restore candles to _lastCandles so chart tools (regression, etc.) work
-  if ((entry.isSession || entry.isNamed) && entry.candles?.length) {
-    _lastCandles = entry.candles;
+  // If the modal is already open for the correct coin — apply immediately
+  if (bigChart && currentModalCoinId === entry.coinId) {
+    applyEntry();
+    return;
   }
 
-  // Restore chat context
-  _chatOhlcSummary = entry.ohlcSummaryForChat || "";
-  _chatCoinName = entry.coinName || "";
-  _chatInterval = entry.interval || "";
-  _chatHistory = [];
+  // Otherwise open (or re-open) the modal for the right coin, wait for
+  // candles to load, then apply lines + report
+  const coin = latestMarketData[entry.coinId];
+  const name = entry.coinName || entry.coinId;
+  const symbol = coin?.symbol || entry.coinId;
 
-  const dateStr = new Date(entry.date).toLocaleString("el-GR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit"
-  });
-  $analysisHint().textContent =
-    `↩ Φορτώθηκε αποθηκευμένη ανάλυση (${entry.coinName} · ${entry.interval} · ${dateStr})`;
+  // Set the saved interval/limit so loadModalChart uses the right timeframe
+  currentInterval = entry.interval?.includes("λ") || entry.interval?.includes("1λ") ? "1m"
+    : entry.interval?.includes("15λ") ? "15m"
+    : entry.interval?.includes("1ω") ? "1h"
+    : entry.interval?.includes("ημ") ? "1d"
+    : "1h";
+
+  // Map label back to interval/limit
+  const tfMap = {
+    "2ω / 1λ": ["1m",120], "2ω": ["1m",120],
+    "24ω / 15λ": ["15m",96], "24ω": ["15m",96],
+    "7ημ / 1ω": ["1h",168], "7ημ": ["1h",168],
+    "1έτος / 1ημ": ["1d",365], "1έτος": ["1d",365]
+  };
+  const tf = tfMap[entry.interval] || ["1h", 168];
+  currentInterval = tf[0];
+  currentLimit = tf[1];
+
+  // Update select to reflect chosen timeframe
+  const sel = document.getElementById("timeframeSelect");
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      const [iv, lim] = sel.options[i].value.split("|");
+      if (iv === currentInterval && parseInt(lim) === currentLimit) {
+        sel.selectedIndex = i;
+        break;
+      }
+    }
+  }
+
+  openChartModal(entry.coinId, name, symbol);
+
+  // Monkey-patch loadModalChart completion: wait for chart to be ready
+  const origRender = _renderBigChartImpl;
+  const _once = function(candles) {
+    origRender(candles);
+    renderBigChart = _renderBigChartWrapper; // restore
+    // Apply lines after chart renders (next tick)
+    setTimeout(applyEntry, 50);
+  };
+  // Override just this one render cycle
+  let _renderBigChartWrapper = renderBigChart;
+  renderBigChart = function(candles) {
+    if (candles && candles.length) _lastCandles = candles;
+    _once(_lastCandles);
+  };
 }
 
 document.getElementById("clearSavedBtn")?.addEventListener("click", () => {

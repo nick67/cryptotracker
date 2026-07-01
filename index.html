@@ -2442,6 +2442,9 @@ document.getElementById("resetZoomBtn").addEventListener("click", () => {
   }
 });
 
+// Prevent browser context menu / autoscroll icon on middle button press
+bigChartCanvas.addEventListener("auxclick", (evt) => { if (evt.button === 1) evt.preventDefault(); });
+
 // Ctrl+wheel over the chart rescales the price (y) axis around the cursor;
 // plain wheel still zooms the time (x) axis via chartjs-plugin-zoom.
 bigChartCanvas.addEventListener("wheel", (evt) => {
@@ -4177,22 +4180,23 @@ bigChartCanvas.addEventListener("mousedown", (evt) => {
     evt.stopImmediatePropagation();
   }
 
-  // Custom pan: Ctrl+left-click OR middle mouse button (button 1)
+  // Custom pan: Ctrl+left-click OR middle mouse button (button 1).
+  // Works regardless of which drawing tool is active.
   const isCtrlDrag = evt.button === 0 && evt.ctrlKey;
   const isMiddle   = evt.button === 1;
-  if ((isCtrlDrag || isMiddle) && activeTool === null) {
-    evt.preventDefault();
+  if (isCtrlDrag || isMiddle) {
+    evt.preventDefault(); // prevents text selection (Ctrl) and autoscroll (middle)
     evt.stopImmediatePropagation();
-    const { x, y } = Chart.helpers.getRelativePosition(evt, bigChart);
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
     const xScale = bigChart.scales.x;
     const yScale = bigChart.scales.y;
     panState = {
-      startX: x,
-      startY: y,
-      xMin: xScale.min,
-      xMax: xScale.max,
-      yMin: yScale.min !== undefined ? yScale.min : yScale.suggestedMin,
-      yMax: yScale.max !== undefined ? yScale.max : yScale.suggestedMax
+      startX: pos.x,
+      startY: pos.y,
+      xMin: xScale.min ?? xScale.min,
+      xMax: xScale.max ?? xScale.max,
+      yMin: yScale.min,
+      yMax: yScale.max
     };
     bigChartCanvas.style.cursor = "grabbing";
     return;
@@ -4267,33 +4271,6 @@ bigChartCanvas.addEventListener("mousedown", (evt) => {
 
 bigChartCanvas.addEventListener("mousemove", (evt) => {
   if (!bigChart) return;
-
-  // Custom pan drag
-  if (panState) {
-    evt.preventDefault();
-    const { x, y } = Chart.helpers.getRelativePosition(evt, bigChart);
-    const xScale = bigChart.scales.x;
-    const yScale = bigChart.scales.y;
-
-    const xRange = panState.xMax - panState.xMin;
-    const yRange = (panState.yMax || 0) - (panState.yMin || 0);
-    const { chartArea } = bigChart;
-    const pxW = chartArea.right - chartArea.left;
-    const pxH = chartArea.bottom - chartArea.top;
-
-    const dx = panState.startX - x;
-    const dy = panState.startY - y;
-
-    bigChart.options.scales.x.min = panState.xMin + (dx / pxW) * xRange;
-    bigChart.options.scales.x.max = panState.xMax + (dx / pxW) * xRange;
-
-    if (yRange > 0) {
-      bigChart.options.scales.y.min = (panState.yMin || 0) - (dy / pxH) * yRange;
-      bigChart.options.scales.y.max = (panState.yMax || 0) - (dy / pxH) * yRange;
-    }
-    bigChart.update("none");
-    return;
-  }
 
   // During a line drag, stop zoom plugin from also processing the move
   if (dragState !== null) {
@@ -4376,6 +4353,43 @@ bigChartCanvas.addEventListener("mousemove", (evt) => {
     bigChartCanvas.style.cursor = overHandle ? "grab" : "default";
   }
 });
+
+// Window-level pan handler — tracks mouse even outside the canvas during drag
+window.addEventListener("mousemove", (evt) => {
+  if (!panState || !bigChart) return;
+  evt.preventDefault();
+  const rect = bigChartCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  // Convert client coords to chart-relative pixel coords
+  const rawX = (evt.clientX - rect.left);
+  const rawY = (evt.clientY - rect.top);
+  // Scale to canvas CSS pixels (Chart.helpers.getRelativePosition equivalent)
+  const pos = Chart.helpers.getRelativePosition(
+    { clientX: evt.clientX, clientY: evt.clientY, target: bigChartCanvas },
+    bigChart
+  );
+
+  const { chartArea } = bigChart;
+  const pxW = chartArea.right - chartArea.left;
+  const pxH = chartArea.bottom - chartArea.top;
+  const xRange = panState.xMax - panState.xMin;
+
+  const dx = panState.startX - pos.x;
+  const dy = panState.startY - pos.y;
+
+  bigChart.options.scales.x.min = panState.xMin + (dx / pxW) * xRange;
+  bigChart.options.scales.x.max = panState.xMax + (dx / pxW) * xRange;
+
+  // Vertical pan only if we have valid y bounds
+  const yRange = (panState.yMax != null && panState.yMin != null)
+    ? panState.yMax - panState.yMin : 0;
+  if (yRange > 0) {
+    bigChart.options.scales.y.min = panState.yMin - (dy / pxH) * yRange;
+    bigChart.options.scales.y.max = panState.yMax - (dy / pxH) * yRange;
+  }
+
+  bigChart.update("none");
+}, { passive: false });
 
 window.addEventListener("mouseup", (evt) => {
   // End custom pan

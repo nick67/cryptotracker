@@ -4684,7 +4684,7 @@ function renderBigChart(candles) {
 
   const datasets = [{
     label: "Τιμή (O/H/L/C)",
-    data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c })),
+    data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c, v: d.v })),
     candleData: true,
     upColor: "#3ddc97",
     downColor: "#ff5c6c",

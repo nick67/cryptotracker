@@ -3981,15 +3981,18 @@ if (typeof Chart !== "undefined") {
    whichever candle the user is hovering over (via the Chart.js external
    tooltip handler below) — keeps this information off the canvas
    entirely so it never overlaps candles/lines. */
-function updateOhlcTicker(o, h, l, c) {
+function updateOhlcTicker(o, h, l, c, v) {
   const el = document.getElementById("modalOhlcTicker");
   if (!el) return;
   const s = currencySymbol();
+  const volPart = (v !== undefined && v !== null && v > 0)
+    ? ` Vol:<b style="color:#4f8cff">${formatCompact(v)}</b>` : "";
   el.innerHTML =
     `O:<b style="color:var(--text)">${s}${formatNumber(o)}</b> ` +
     `H:<b style="color:var(--green)">${s}${formatNumber(h)}</b> ` +
     `L:<b style="color:var(--red)">${s}${formatNumber(l)}</b> ` +
-    `C:<b style="color:var(--text)">${s}${formatNumber(c)}</b>`;
+    `C:<b style="color:var(--text)">${s}${formatNumber(c)}</b>` +
+    volPart;
 }
 
 function dataCoordsFromEvent(evt) {
@@ -4537,8 +4540,10 @@ async function loadModalChart() {
       // If we need more candles than that, use the already-mapped coarser interval.
       // (KRAKEN_INTERVAL_MAP already maps 6h→240, 12h→1440 for unsupported intervals)
       const krakenInterval = KRAKEN_INTERVAL_MAP[effectiveInterval] || 60;
-      // `since` in Unix seconds = start of desired window
-      const sinceMs = Date.now() - (currentLimit * intervalMs);
+      // Fetch 3× the visible window as history so panning left reveals
+      // older candles (Kraken caps at 720 candles per request).
+      const histCount = Math.min(currentLimit * 3, 720);
+      const sinceMs = Date.now() - (histCount * intervalMs);
       const sinceSec = Math.floor(sinceMs / 1000);
       const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}&since=${sinceSec}`;
       const res = await fetch(url);
@@ -4555,12 +4560,8 @@ async function loadModalChart() {
         "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3, "1w": 7*86400e3
       }[currentInterval] || 3600e3;
       let url;
-      if (currentLimit <= 1000) {
-        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&limit=${currentLimit}`;
-      } else {
-        const startTime = Date.now() - intervalMs * currentLimit;
-        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&startTime=${startTime}&limit=1000`;
-      }
+      const histLimit = Math.min(currentLimit * 3, 1000);
+      url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&limit=${histLimit}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
@@ -4819,13 +4820,13 @@ function renderBigChart(candles) {
             if (!tt || tt.opacity === 0 || !tt.dataPoints || tt.dataPoints.length === 0) {
               // Not hovering — show the latest candle by default
               const last = candleDs.data[candleDs.data.length - 1];
-              updateOhlcTicker(last.o, last.h, last.l, last.c);
+              updateOhlcTicker(last.o, last.h, last.l, last.c, last.v);
               return;
             }
             const candlePoint = tt.dataPoints.find(dp => dp.dataset.candleData);
             if (candlePoint) {
               const d = candlePoint.raw;
-              updateOhlcTicker(d.o, d.h, d.l, d.c);
+              updateOhlcTicker(d.o, d.h, d.l, d.c, d.v);
             }
           }
         },
@@ -4842,6 +4843,17 @@ function renderBigChart(candles) {
       }
     }
   });
+
+  // Initial view: show only the most recent `currentLimit` candles;
+  // the extra fetched history stays available by panning left.
+  if (candles.length > currentLimit) {
+    const firstVisible = candles[candles.length - currentLimit][0];
+    const lastTs = candles[candles.length - 1][0];
+    const pad = (lastTs - firstVisible) * 0.02;
+    bigChart.options.scales.x.min = firstVisible;
+    bigChart.options.scales.x.max = lastTs + pad;
+    bigChart.update("none");
+  }
 }
 
 // cache last candle data so the chart can be redrawn (e.g. clearing lines)

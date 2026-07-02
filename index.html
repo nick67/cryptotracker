@@ -461,10 +461,13 @@
     <div class="modal-tools">
       <!-- Timeframe dropdown (πορτοκαλί) -->
       <select id="timeframeSelect" style="background:#1a1f2e;color:#f97316;border:1px solid #f97316;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;">
-        <option value="1m|120"  style="background:#1a1f2e;color:#f97316;">⏱ 2ω / 1λ</option>
-        <option value="15m|96"  style="background:#1a1f2e;color:#f97316;">⏱ 24ω / 15λ</option>
-        <option value="1h|168"  style="background:#1a1f2e;color:#f97316;">⏱ 7ημ / 1ω</option>
-        <option value="1d|365"  style="background:#1a1f2e;color:#f97316;">⏱ 1έτος / 1ημ</option>
+        <option value="1m|120"   style="background:#1a1f2e;color:#f97316;">⏱ 1λ (2ω)</option>
+        <option value="5m|288"   style="background:#1a1f2e;color:#f97316;">⏱ 5λ</option>
+        <option value="15m|288"  style="background:#1a1f2e;color:#f97316;">⏱ 15λ</option>
+        <option value="1h|168"   style="background:#1a1f2e;color:#f97316;">⏱ 1ω</option>
+        <option value="4h|360"   style="background:#1a1f2e;color:#f97316;">⏱ 4ω</option>
+        <option value="1d|365"   style="background:#1a1f2e;color:#f97316;">⏱ 1ημ</option>
+        <option value="1w|104"   style="background:#1a1f2e;color:#f97316;">⏱ 1εβδ</option>
       </select>
 
       <!-- Drawing tools dropdown (μωβ) -->
@@ -769,8 +772,8 @@ const KRAKEN_INTERVAL_MAP = {
   "30m": 30,
   "1h":  60,
   "4h":  240,
-  "6h":  240,   // Kraken δεν υποστηρίζει 360 → fallback σε 4h
-  "12h": 1440,  // Kraken δεν υποστηρίζει 720 → fallback σε 1d
+  "6h":  240,   // Kraken δεν υποστηρίζει 6h → 4h
+  "12h": 1440,  // Kraken δεν υποστηρίζει 12h → 1d
   "1d":  1440,
   "1w":  10080
 };
@@ -2255,8 +2258,8 @@ const $userLinesHint    = () => document.getElementById("userLinesHint");
 
 let bigChart = null;
 let currentModalCoinId = null;
-let currentInterval = "1m";
-let currentLimit = 60;
+let currentInterval = "5m";
+let currentLimit = 288;
 let currentModalSymbol = "";
 let dataSource = "binance"; // "binance" | "kraken" | "coingecko"
 
@@ -3377,10 +3380,13 @@ function loadSavedAnalysis(entry) {
 
   // Map label back to interval/limit
   const tfMap = {
-    "2ω / 1λ": ["1m",120], "2ω": ["1m",120],
-    "24ω / 15λ": ["15m",96], "24ω": ["15m",96],
-    "7ημ / 1ω": ["1h",168], "7ημ": ["1h",168],
-    "1έτος / 1ημ": ["1d",365], "1έτος": ["1d",365]
+    "1λ (2ω)": ["1m",120], "⏱ 1λ (2ω)": ["1m",120],
+    "5λ": ["5m",288], "⏱ 5λ": ["5m",288],
+    "15λ": ["15m",288], "⏱ 15λ": ["15m",288],
+    "1ω": ["1h",168], "⏱ 1ω": ["1h",168],
+    "4ω": ["4h",360], "⏱ 4ω": ["4h",360],
+    "1ημ": ["1d",365], "⏱ 1ημ": ["1d",365],
+    "1εβδ": ["1w",104], "⏱ 1εβδ": ["1w",104]
   };
   const tf = tfMap[entry.interval] || ["1h", 168];
   currentInterval = tf[0];
@@ -4521,7 +4527,7 @@ async function loadModalChart() {
       // `since` parameter so we always get the correct time window regardless
       // of how many candles that produces.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3, "1w": 7*86400e3
       }[currentInterval] || 3600e3;
       // Kraken max 720 candles/request. For windows > 720 candles, use a
       // coarser but supported interval: 4h (240min) covers up to 120 days,
@@ -4546,7 +4552,7 @@ async function loadModalChart() {
       const symbol = BINANCE_SYMBOL_MAP[currentModalCoinId];
       // Binance limit max is 1000. For larger ranges, use startTime instead.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3, "1w": 7*86400e3
       }[currentInterval] || 3600e3;
       let url;
       if (currentLimit <= 1000) {
@@ -4581,43 +4587,50 @@ async function loadCoinGeckoFallback() {
   let candles;
   const H = 60 * 60 * 1000;
   if (currentInterval === "1m") {
-    // 2ω: last 2 hours with 1-min candles
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     const twoHoursAgo = Date.now() - 2 * H;
     const recent = data.prices.filter(p => p[0] >= twoHoursAgo);
     candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-24), 60 * 1000, data.total_volumes);
-  } else if (currentInterval === "5m" || currentInterval === "15m") {
-    // 24ω: 5λ ή 15λ candles από τελευταίο 24ωρο
+  } else if (currentInterval === "5m") {
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    const bucketMs = currentInterval === "5m" ? 5 * 60 * 1000 : 15 * 60 * 1000;
-    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
-  } else if (currentInterval === "30m" || currentInterval === "1h") {
-    // 7ημ: 30λ ή 1ω candles
+    candles = buildCandlesFromPrices(data.prices, 5 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "15m") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=3`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 15 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "30m") {
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    const bucketMs = currentInterval === "30m" ? 30 * 60 * 1000 : H;
-    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
-  } else if (currentInterval === "6h" || currentInterval === "12h" || currentInterval === "1d") {
-    // 1έτος: 6ω, 12ω ή 1ημ candles
+    candles = buildCandlesFromPrices(data.prices, 30 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "1h") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
+  } else if (currentInterval === "4h") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=60`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 4 * H, data.total_volumes);
+  } else if (currentInterval === "1d") {
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    const bucketMs = currentInterval === "6h" ? 6 * H : currentInterval === "12h" ? 12 * H : 24 * H;
-    candles = buildCandlesFromPrices(data.prices, bucketMs, data.total_volumes);
+    candles = buildCandlesFromPrices(data.prices, 24 * H, data.total_volumes);
+  } else if (currentInterval === "1w") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=730&interval=daily`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 7 * 24 * H, data.total_volumes);
   } else {
-    // Fallback: 1 year daily
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     candles = buildCandlesFromPrices(data.prices, 24 * H, data.total_volumes);
   }
@@ -4736,8 +4749,8 @@ function renderBigChart(candles) {
 
   const timeUnit =
     ["1m","5m","15m"].includes(currentInterval) ? "minute"
-    : ["30m","1h"].includes(currentInterval)     ? "hour"
-    : "day"; // 6h, 12h, 1d → day labels
+    : ["30m","1h","4h"].includes(currentInterval) ? "hour"
+    : "day"; // 1d, 1w → day labels
 
   // Display formats: date + time only, no day name
   const timeDisplayFormats = {

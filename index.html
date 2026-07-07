@@ -3198,12 +3198,15 @@ function getSavedAnalyses() {
 
 function saveAnalysis(entry) {
   const list = getSavedAnalyses();
+  const sessions = list.filter(e => e.isSession);
   // Avoid duplicates within the same minute for the same coin+interval
   const key = entry.coinName + "|" + entry.interval + "|" + entry.date.slice(0, 16);
-  const filtered = list.filter(e => (e.coinName + "|" + e.interval + "|" + e.date.slice(0, 16)) !== key);
-  filtered.unshift({ ...entry, id: Date.now() });
-  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  let nonSessions = list.filter(e => !e.isSession &&
+    (e.coinName + "|" + e.interval + "|" + (e.date||"").slice(0, 16)) !== key);
+  nonSessions.unshift({ ...entry, id: Date.now() });
+  if (nonSessions.length > MAX_SAVED_ANALYSES) nonSessions.length = MAX_SAVED_ANALYSES;
+  // Sessions kept separately — they never evict analyses
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions, ...sessions]));
   renderSavedAnalysesList();
   markDirtyForSync();
 }
@@ -3252,9 +3255,11 @@ document.getElementById("manualSaveBtn").addEventListener("click", () => {
   };
 
   const list = getSavedAnalyses();
-  list.unshift(entry);
-  if (list.length > MAX_SAVED_ANALYSES) list.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
+  const sessions2 = list.filter(e => e.isSession);
+  let nonSessions2 = list.filter(e => !e.isSession);
+  nonSessions2.unshift(entry);
+  if (nonSessions2.length > MAX_SAVED_ANALYSES) nonSessions2.length = MAX_SAVED_ANALYSES;
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions2, ...sessions2]));
   renderSavedAnalysesList();
   markDirtyForSync();
   document.getElementById("analysisRangeHint").textContent = `✓ Αποθηκεύτηκε ως «${entry.name}»`;
@@ -4894,10 +4899,13 @@ function autoSaveSession() {
   };
 
   const list = getSavedAnalyses();
-  const filtered = list.filter(e => e.id !== sessionKey);
-  filtered.unshift(entry);
-  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  const nonSessions = list.filter(e => !e.isSession);
+  let sessions = list.filter(e => e.isSession && e.id !== sessionKey);
+  sessions.unshift(entry);
+  const MAX_SESSIONS = 6;
+  if (sessions.length > MAX_SESSIONS) sessions.length = MAX_SESSIONS;
+  // Analyses first, sessions after — sessions never push analyses out
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions, ...sessions]));
   renderSavedAnalysesList();
 }
 

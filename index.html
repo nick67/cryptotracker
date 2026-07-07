@@ -4902,7 +4902,7 @@ function autoSaveSession() {
   const nonSessions = list.filter(e => !e.isSession);
   let sessions = list.filter(e => e.isSession && e.id !== sessionKey);
   sessions.unshift(entry);
-  const MAX_SESSIONS = 6;
+  const MAX_SESSIONS = 3;
   if (sessions.length > MAX_SESSIONS) sessions.length = MAX_SESSIONS;
   // Analyses first, sessions after — sessions never push analyses out
   localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions, ...sessions]));

@@ -2794,6 +2794,17 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
   const existing = canvasId === "splitChartA" ? splitChartA : splitChartB;
   if (existing) existing.destroy();
 
+  // Current price + change vs previous candle, shown in the title row
+  const last = visible[visible.length - 1];
+  const prev = visible[visible.length - 2];
+  const titleEl = document.getElementById(canvasId === "splitChartA" ? "splitTitleA" : "splitTitleB");
+  if (last) {
+    const isUp = prev ? last[4] >= prev[4] : true;
+    const color = isUp ? "#3ddc97" : "#ff5c6c";
+    const coinName = latestMarketData[coinId]?.name || coinId;
+    titleEl.innerHTML = `${coinName} &nbsp; <span style="color:${color}; font-weight:700;">${currencySymbol()}${formatNumber(last[4], coinId)} ${isUp ? "▲" : "▼"}</span>`;
+  }
+
   const commonScales = {
     x: { type: "time", time: { unit: limit > 200 ? "day" : "hour" }, ticks: { color: "#9aa1ac", maxTicksLimit: 8 }, grid: { color: "rgba(255,255,255,0.05)" } },
     y: { ticks: { color: "#9aa1ac", callback: (v) => currencySymbol() + formatNumber(v, coinId) }, grid: { color: "rgba(255,255,255,0.05)" } }
@@ -2860,8 +2871,64 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
     });
   }
 
+  // Tag the chart instance with its coin so the shared crosshair plugin
+  // can format the price label with the right decimals.
+  chart.$coinId = coinId;
+
   if (canvasId === "splitChartA") splitChartA = chart; else splitChartB = chart;
 }
+
+/* Horizontal crosshair with a price badge on the y-axis, for split-view
+   charts specifically. Registered once, globally — but keeps per-chart
+   state on the chart instance itself (chart.$crosshair) so the two split
+   charts don't interfere with each other or with the main bigChart. */
+const splitCrosshairPlugin = {
+  id: "splitCrosshair",
+  afterEvent(chart, args) {
+    if (chart.canvas.id !== "splitChartA" && chart.canvas.id !== "splitChartB") return;
+    const evt = args.event;
+    if (evt.type === "mousemove") {
+      const pos = Chart.helpers.getRelativePosition(evt, chart);
+      const inArea = pos.y >= chart.chartArea.top && pos.y <= chart.chartArea.bottom
+                  && pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right;
+      chart.$crosshair = inArea ? { y: pos.y } : null;
+    } else if (evt.type === "mouseout") {
+      chart.$crosshair = null;
+    }
+    args.changed = true;
+  },
+  afterDatasetsDraw(chart) {
+    if (chart.canvas.id !== "splitChartA" && chart.canvas.id !== "splitChartB") return;
+    const cross = chart.$crosshair;
+    if (!cross) return;
+    const { ctx, chartArea, scales } = chart;
+
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(200,200,200,0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, cross.y);
+    ctx.lineTo(chartArea.right, cross.y);
+    ctx.stroke();
+
+    const price = scales.y.getValueForPixel(cross.y);
+    const priceText = currencySymbol() + formatNumber(price, chart.$coinId);
+    ctx.setLineDash([]);
+    ctx.font = "bold 10px sans-serif";
+    const pw = ctx.measureText(priceText).width + 8;
+    const boxX = chartArea.left;
+    const boxY = cross.y - 9;
+    ctx.fillStyle = "rgba(60,70,90,0.92)";
+    ctx.fillRect(boxX, boxY, pw, 18);
+    ctx.fillStyle = "#e8eaed";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(priceText, boxX + pw / 2, cross.y);
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(splitCrosshairPlugin);
 
 async function loadOrderBook() {
   const statusEl4 = document.getElementById("orderBookStatus");

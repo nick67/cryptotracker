@@ -310,6 +310,44 @@
   </div>
 </div>
 
+<!-- SPLIT VIEW MODAL: side-by-side comparison of two coins -->
+<div class="modal-overlay" id="splitViewModal">
+  <div class="modal-box" style="max-width:1400px;">
+    <div class="modal-head">
+      <h2>⚏ Σύγκριση διαγραμμάτων</h2>
+      <button class="icon-btn" id="closeSplitViewBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; align-items:center;">
+      <select id="splitCoinSelectA" style="background:var(--panel-2); color:#4f8cff; border:1px solid #4f8cff; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitCoinSelectB" style="background:var(--panel-2); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitTimeframeSelect" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="1m|120">1λ (2ω)</option>
+        <option value="5m|288" selected>5λ</option>
+        <option value="15m|288">15λ</option>
+        <option value="1h|168">1ω</option>
+        <option value="4h|360">4ω</option>
+        <option value="1d|365">1ημ</option>
+        <option value="1w|104">1εβδ</option>
+      </select>
+      <button id="splitRefreshBtn" style="border-color:#22c55e; color:#22c55e;">↻ Ανανέωση</button>
+    </div>
+    <div style="display:flex; gap:1rem; flex:1; min-height:0;">
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+        <div id="splitTitleA" style="font-size:0.9rem; font-weight:600; color:#4f8cff; margin-bottom:0.4rem;"></div>
+        <div style="position:relative; flex:1; min-height:400px;">
+          <canvas id="splitChartA"></canvas>
+        </div>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+        <div id="splitTitleB" style="font-size:0.9rem; font-weight:600; color:#f59e0b; margin-bottom:0.4rem;"></div>
+        <div style="position:relative; flex:1; min-height:400px;">
+          <canvas id="splitChartB"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="tabs">
   <button class="tab-btn active" data-tab="watchlist">Παρακολούθηση</button>
   <button class="tab-btn" data-tab="portfolio">Χαρτοφυλάκιο</button>
@@ -463,13 +501,17 @@
 <div class="modal-overlay" id="chartModal">
   <div class="modal-box">
     <div class="modal-head">
-      <h2 id="modalTitle">Διάγραμμα</h2>
+      <button class="icon-btn" id="modalHomeBtn" title="Επιστροφή στην αρχική" style="font-size:1.1rem;">🏠</button>
+      <select id="modalCoinSwitch" title="Εναλλαγή νομίσματος" style="background:var(--panel-2); color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:0.28rem 0.5rem; font-size:0.85rem; cursor:pointer; font-weight:600; margin-left:0.5rem; max-width:220px;">
+      </select>
+      <h2 id="modalTitle" style="display:none;">Διάγραμμα</h2>
       <select id="modalDecimalsSelect" title="Δεκαδικά ψηφία γι' αυτό το νόμισμα" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.75rem; padding:0.15rem 0.3rem; cursor:pointer; margin-left:0.6rem;">
         <option value="1">.1</option>
         <option value="2">.2</option>
         <option value="3">.3</option>
         <option value="4">.4</option>
       </select>
+      <button class="icon-btn" id="splitViewBtn" title="Διπλό παράθυρο σύγκρισης" style="font-size:1.1rem; margin-left:0.4rem;">⚏</button>
       <span id="modalOhlcTicker" style="font-size:0.85rem; color:var(--text-dim); margin-left:auto; margin-right:1rem; font-family:monospace;"></span>
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
@@ -2654,6 +2696,104 @@ document.getElementById("orderBookModal").addEventListener("click", (e) => {
 });
 document.getElementById("orderBookRefreshBtn").addEventListener("click", loadOrderBook);
 
+/* =====================================================
+   SPLIT VIEW: side-by-side comparison of two coins
+   ===================================================== */
+let splitChartA = null, splitChartB = null;
+
+function populateSplitSelects() {
+  ["splitCoinSelectA", "splitCoinSelectB"].forEach((id, idx) => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = "";
+    watchlist.forEach(cid => {
+      const coin = latestMarketData[cid];
+      const opt = document.createElement("option");
+      opt.value = cid;
+      opt.textContent = coin ? `${coin.name} (${coin.symbol.toUpperCase()})` : cid;
+      sel.appendChild(opt);
+    });
+    // Default: A = current modal coin, B = next different coin in watchlist
+    if (idx === 0 && currentModalCoinId) sel.value = currentModalCoinId;
+    if (idx === 1) {
+      const other = watchlist.find(c => c !== (currentModalCoinId || watchlist[0]));
+      if (other) sel.value = other;
+    }
+  });
+}
+
+document.getElementById("splitViewBtn").addEventListener("click", () => {
+  populateSplitSelects();
+  document.getElementById("splitViewModal").classList.add("open");
+  loadSplitCharts();
+});
+document.getElementById("closeSplitViewBtn").addEventListener("click", () => {
+  document.getElementById("splitViewModal").classList.remove("open");
+});
+document.getElementById("splitRefreshBtn").addEventListener("click", loadSplitCharts);
+document.getElementById("splitCoinSelectA").addEventListener("change", loadSplitCharts);
+document.getElementById("splitCoinSelectB").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTimeframeSelect").addEventListener("change", loadSplitCharts);
+
+async function loadSplitCharts() {
+  const coinA = document.getElementById("splitCoinSelectA").value;
+  const coinB = document.getElementById("splitCoinSelectB").value;
+  const [interval, limit] = document.getElementById("splitTimeframeSelect").value.split("|");
+
+  document.getElementById("splitTitleA").textContent = latestMarketData[coinA]?.name || coinA;
+  document.getElementById("splitTitleB").textContent = latestMarketData[coinB]?.name || coinB;
+
+  try {
+    const [candlesA, candlesB] = await Promise.all([
+      fetchCandlesForCoin(coinA, interval, parseInt(limit)),
+      fetchCandlesForCoin(coinB, interval, parseInt(limit))
+    ]);
+    renderSplitChart("splitChartA", candlesA, coinA, parseInt(limit));
+    renderSplitChart("splitChartB", candlesB, coinB, parseInt(limit));
+  } catch (err) {
+    console.error("Split view load error:", err);
+  }
+}
+
+function renderSplitChart(canvasId, candles, coinId, limit) {
+  const canvas = document.getElementById(canvasId);
+  const visible = candles.length > limit ? candles.slice(-limit) : candles;
+  const ohlcData = visible.map(c => ({ x: c[0], o: c[1], h: c[2], l: c[3], c: c[4] }));
+
+  const existing = canvasId === "splitChartA" ? splitChartA : splitChartB;
+  if (existing) existing.destroy();
+
+  const chart = new Chart(canvas, {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: "OHLC",
+        data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c })),
+        candleData: true,
+        upColor: "#3ddc97",
+        downColor: "#ff5c6c"
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: true,
+        callbacks: { label: (ctx) => {
+          const d = ctx.raw;
+          const s = currencySymbol();
+          return `O:${formatNumber(d.o,coinId)} H:${formatNumber(d.h,coinId)} L:${formatNumber(d.l,coinId)} C:${formatNumber(d.c,coinId)}`;
+        }}
+      }},
+      scales: {
+        x: { type: "time", time: { unit: limit > 200 ? "day" : "hour" }, ticks: { color: "#9aa1ac", maxTicksLimit: 8 }, grid: { color: "rgba(255,255,255,0.05)" } },
+        y: { ticks: { color: "#9aa1ac", callback: (v) => currencySymbol() + formatNumber(v, coinId) }, grid: { color: "rgba(255,255,255,0.05)" } }
+      }
+    }
+  });
+
+  if (canvasId === "splitChartA") splitChartA = chart; else splitChartB = chart;
+}
+
 async function loadOrderBook() {
   const statusEl4 = document.getElementById("orderBookStatus");
   const titleEl = document.getElementById("orderBookTitle");
@@ -4544,6 +4684,8 @@ function openChartModal(coinId, name, symbol) {
     : "CoinGecko";
   modalTitle.textContent = `${name} (${symbol.toUpperCase()}) — Candlestick (${sourceLabel})`;
 
+  populateCoinSwitch(coinId);
+
   const decSel = document.getElementById("modalDecimalsSelect");
   if (decSel) decSel.value = String(getDecimalsFor(coinId));
 
@@ -4583,10 +4725,80 @@ function closeChartModal() {
   document.getElementById("analyzeBtn").classList.remove("active");
 }
 
+/* ---------- Coin switcher: quick jump to another watchlist coin ---------- */
+function populateCoinSwitch(activeCoinId) {
+  const sel = document.getElementById("modalCoinSwitch");
+  if (!sel) return;
+  sel.innerHTML = "";
+  watchlist.forEach(id => {
+    const coin = latestMarketData[id];
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = coin ? `${coin.name} (${coin.symbol.toUpperCase()})` : id;
+    if (id === activeCoinId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById("modalCoinSwitch").addEventListener("change", (e) => {
+  const newId = e.target.value;
+  if (!newId || newId === currentModalCoinId) return;
+  const coin = latestMarketData[newId];
+  const name = coin?.name || newId;
+  const symbol = coin?.symbol || newId;
+  openChartModal(newId, name, symbol);
+});
+
+document.getElementById("modalHomeBtn").addEventListener("click", () => {
+  closeChartModal();
+});
+
 /* Fetch candle data from the best available source:
    - Kraken (EUR pairs) when currency=EUR and a Kraken EUR pair exists
    - Binance (USDT pairs) otherwise, if available
    - CoinGecko as a last-resort fallback */
+/* Standalone candle fetcher — independent of the main modal's global state
+   (currentModalCoinId/currentInterval/etc). Used by the split-view comparison
+   panel so it doesn't interfere with the primary chart. */
+async function fetchCandlesForCoin(coinId, interval, limit) {
+  const intervalMs = {
+    "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3,
+    "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3,
+    "1d": 86400e3, "1w": 7*86400e3
+  }[interval] || 3600e3;
+
+  const krakenSymbol = KRAKEN_EUR_MAP[coinId];
+  const binanceSymbol = BINANCE_SYMBOL_MAP[coinId];
+
+  if (currency === "eur" && krakenSymbol) {
+    const krakenInterval = KRAKEN_INTERVAL_MAP[interval] || 60;
+    const histCount = Math.min(limit * 3, 720);
+    const sinceSec = Math.floor((Date.now() - histCount * intervalMs) / 1000);
+    const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}&since=${sinceSec}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.error && data.error.length > 0) throw new Error(data.error.join(", "));
+    const resultKey = Object.keys(data.result).find(k => k !== "last");
+    const rows = data.result[resultKey] || [];
+    return rows.map(r => [r[0]*1000, parseFloat(r[1]), parseFloat(r[2]), parseFloat(r[3]), parseFloat(r[4]), parseFloat(r[6])]);
+  } else if (binanceSymbol) {
+    const histLimit = Math.min(limit * 3, 1000);
+    const url = `${BINANCE_BASE}/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${histLimit}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return data.map(k => [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4]), parseFloat(k[5])]);
+  } else {
+    // CoinGecko fallback — daily granularity only, good enough for comparison
+    const url = `${COINGECKO_BASE}/coins/${coinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return buildCandlesFromPrices(data.prices, 24*3600e3, data.total_volumes);
+  }
+}
+
 async function loadModalChart() {
   if (!currentModalCoinId) return;
   bigChartCanvas.style.opacity = "0.4";

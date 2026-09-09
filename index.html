@@ -245,6 +245,15 @@
     <p class="subtitle">Τιμές, μεταβολές, candlestick διαγράμματα και ανάλυση τάσεων από το CoinGecko (δωρεάν δημόσιο API).</p>
   </div>
   <div style="display:flex; align-items:center; gap:0.5rem;">
+    <label style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:0.3rem;">
+      Δεκαδικά (προεπιλογή):
+      <select id="decimalsSelect" style="background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:0.2rem 0.4rem; font-size:0.78rem; cursor:pointer;">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </label>
     <span id="syncStatusIndicator" style="font-size:0.78rem; color:var(--text-dim);"></span>
     <button id="cloudSyncBtn">☁ Cloud Sync</button>
   </div>
@@ -455,6 +464,12 @@
   <div class="modal-box">
     <div class="modal-head">
       <h2 id="modalTitle">Διάγραμμα</h2>
+      <select id="modalDecimalsSelect" title="Δεκαδικά ψηφία γι' αυτό το νόμισμα" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.75rem; padding:0.15rem 0.3rem; cursor:pointer; margin-left:0.6rem;">
+        <option value="1">.1</option>
+        <option value="2">.2</option>
+        <option value="3">.3</option>
+        <option value="4">.4</option>
+      </select>
       <span id="modalOhlcTicker" style="font-size:0.85rem; color:var(--text-dim); margin-left:auto; margin-right:1rem; font-family:monospace;"></span>
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
@@ -652,6 +667,24 @@
 <script>
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
+// Per-coin decimal place overrides. Falls back to DEFAULT_DECIMALS when a
+// coin has no override set. Stored as { coinId: 1-4 }.
+const DECIMALS_KEY = "crypto_tracker_decimals_v1";
+const DEFAULT_DECIMALS_KEY = "crypto_tracker_default_decimals_v1";
+let coinDecimals = {};
+try { coinDecimals = JSON.parse(localStorage.getItem(DECIMALS_KEY) || "{}"); } catch { coinDecimals = {}; }
+let defaultDecimals = parseInt(localStorage.getItem(DEFAULT_DECIMALS_KEY)) || 2;
+if (defaultDecimals < 1 || defaultDecimals > 4) defaultDecimals = 2;
+
+function getDecimalsFor(coinId) {
+  if (coinId && coinDecimals[coinId] !== undefined) return coinDecimals[coinId];
+  return defaultDecimals;
+}
+function setDecimalsFor(coinId, decimals) {
+  coinDecimals[coinId] = decimals;
+  localStorage.setItem(DECIMALS_KEY, JSON.stringify(coinDecimals));
+}
+
 // Vertical crosshair line at cursor position
 const crosshairPlugin = {
   id: "crosshair",
@@ -699,7 +732,7 @@ const crosshairPlugin = {
 
       // Y-axis price label
       const price = scales.y.getValueForPixel(this._y);
-      const priceText = currencySymbol() + formatNumber(price);
+      const priceText = currencySymbol() + formatNumber(price, currentModalCoinId);
       ctx.setLineDash([]);
       ctx.font = "bold 11px sans-serif";
       const pw = ctx.measureText(priceText).width + 8;
@@ -1113,6 +1146,19 @@ function populateSelects() {
   tvSelect.addEventListener("change", loadTradingViewWidget);
 }
 populateSelects();
+
+/* ---------- Default decimal places (used when a coin has no override) ---------- */
+(function initDecimalsSelector() {
+  const sel = document.getElementById("decimalsSelect");
+  if (!sel) return;
+  sel.value = String(defaultDecimals);
+  sel.addEventListener("change", () => {
+    defaultDecimals = parseInt(sel.value);
+    localStorage.setItem(DEFAULT_DECIMALS_KEY, String(defaultDecimals));
+    loadData();
+    if (bigChart) renderBigChart();
+  });
+})();
 
 /* ---------- TradingView widget ---------- */
 function loadTradingViewWidget() {
@@ -1718,12 +1764,10 @@ function computeHoldings() {
 }
 
 /* ---------- Formatting ---------- */
-function formatNumber(n, decimalsSmall = 4) {
+function formatNumber(n, coinId) {
   if (n === null || n === undefined) return "—";
-  if (Math.abs(n) >= 1) {
-    return n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-  }
-  return n.toLocaleString(undefined, { maximumFractionDigits: decimalsSmall, minimumFractionDigits: 2 });
+  const d = getDecimalsFor(coinId);
+  return n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 function formatQty(n) {
   if (n === null || n === undefined) return "—";
@@ -1793,15 +1837,15 @@ function renderCards(coins) {
     const bidAskBlock = ba
       ? `<div class="badge-note" style="color:var(--green); background:rgba(61,220,151,0.1); border-color:rgba(61,220,151,0.25);">Bid/Ask πραγματικού χρόνου (${ba.source}${ba.denom === "USDT" ? ", USDT≈USD" : ""})</div>
          <div class="rows">
-           <div>Bid (προσφορά αγοράς): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.bid)}</b></div>
-           <div>Ask (ζήτηση πώλησης): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.ask)}</b></div>
+           <div>Bid (προσφορά αγοράς): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.bid, coin.id)}</b></div>
+           <div>Ask (ζήτηση πώλησης): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.ask, coin.id)}</b></div>
            <div>Spread: <b>${(((ba.ask - ba.bid) / ba.bid) * 100).toFixed(3)}%</b></div>
            <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
          </div>`
       : `<div class="badge-note">Bid/Ask μη διαθέσιμα · εμφανίζονται 24ω χαμηλό/υψηλό</div>
          <div class="rows">
-           <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h)}</b></div>
-           <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h)}</b></div>
+           <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h, coin.id)}</b></div>
+           <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h, coin.id)}</b></div>
            <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
            <div>Κεφαλαιοποίηση: <b>${symbol}${formatCompact(coin.market_cap)}</b></div>
          </div>`;
@@ -1814,11 +1858,17 @@ function renderCards(coins) {
           <span class="ticker">${coin.symbol}</span>
         </div>
         <div class="head-actions">
+          <select class="decimals-select" data-coin="${coin.id}" title="Δεκαδικά ψηφία για ${coin.name}" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.7rem; padding:0.1rem 0.2rem; cursor:pointer;">
+            <option value="1">.1</option>
+            <option value="2">.2</option>
+            <option value="3">.3</option>
+            <option value="4">.4</option>
+          </select>
           <button class="icon-btn expand" title="Μεγέθυνση διαγράμματος" data-id="${coin.id}" data-name="${coin.name}">⛶</button>
           <button class="icon-btn remove" title="Αφαίρεση" data-id="${coin.id}">✕</button>
         </div>
       </div>
-      <div class="price">${symbol}${formatNumber(coin.current_price)}</div>
+      <div class="price">${symbol}${formatNumber(coin.current_price, coin.id)}</div>
       <div class="change ${isPos ? 'pos' : 'neg'}">
         ${isPos ? '▲' : '▼'} ${change === null || change === undefined ? '—' : Math.abs(change).toFixed(2) + '%'} (24ω)
       </div>
@@ -1827,6 +1877,12 @@ function renderCards(coins) {
     `;
     card.querySelector(".remove").addEventListener("click", () => removeCoin(coin.id));
     card.querySelector(".expand").addEventListener("click", () => openChartModal(coin.id, coin.name, coin.symbol));
+    const decSel = card.querySelector(".decimals-select");
+    decSel.value = String(getDecimalsFor(coin.id));
+    decSel.addEventListener("change", () => {
+      setDecimalsFor(coin.id, parseInt(decSel.value));
+      loadData(); // re-render with new formatting
+    });
     grid.appendChild(card);
 
     const canvas = card.querySelector("canvas");
@@ -2281,6 +2337,12 @@ const HIT_RADIUS_PX = 10;
 
 document.getElementById("closeModalBtn").addEventListener("click", closeChartModal);
 
+document.getElementById("modalDecimalsSelect").addEventListener("change", (e) => {
+  if (!currentModalCoinId) return;
+  setDecimalsFor(currentModalCoinId, parseInt(e.target.value));
+  if (bigChart) renderBigChart();
+});
+
 // Timeframe dropdown
 document.getElementById("timeframeSelect").addEventListener("change", (e) => {
   const [interval, limit] = e.target.value.split("|");
@@ -2637,8 +2699,8 @@ async function loadOrderBook() {
     const totalAskVol = asks.reduce((s, a) => s + a[1], 0);
 
     summaryEl.innerHTML = `
-      <div>Καλύτερη προσφορά (bid): <b style="color:var(--green)">${denom}${formatNumber(bestBid)}</b></div>
-      <div>Καλύτερη ζήτηση (ask): <b style="color:var(--red)">${denom}${formatNumber(bestAsk)}</b></div>
+      <div>Καλύτερη προσφορά (bid): <b style="color:var(--green)">${denom}${formatNumber(bestBid, currentModalCoinId)}</b></div>
+      <div>Καλύτερη ζήτηση (ask): <b style="color:var(--red)">${denom}${formatNumber(bestAsk, currentModalCoinId)}</b></div>
       <div>Spread: <b>${spreadPct}%</b></div>
       <div>Όγκος bids: <b style="color:var(--green)">${formatCompact(totalBidVol)}</b></div>
       <div>Όγκος asks: <b style="color:var(--red)">${formatCompact(totalAskVol)}</b></div>
@@ -2662,7 +2724,7 @@ function renderOrderBookChart(bids, asks, denom) {
     ...asks.map(([price, qty]) => ({ price, qty, side: "ask" }))
   ].sort((a, b) => b.price - a.price);
 
-  const labels = levels.map(l => denom + formatNumber(l.price));
+  const labels = levels.map(l => denom + formatNumber(l.price, currentModalCoinId));
   const data = levels.map(l => l.qty);
   const colors = levels.map(l => l.side === "bid" ? "rgba(61,220,151,0.75)" : "rgba(255,92,108,0.75)");
   const borderColors = levels.map(l => l.side === "bid" ? "#3ddc97" : "#ff5c6c");
@@ -2694,7 +2756,7 @@ function renderOrderBookChart(bids, asks, denom) {
           callbacks: {
             label: (ctx) => {
               const lvl = levels[ctx.dataIndex];
-              return `${lvl.side === "bid" ? "Bid" : "Ask"}: ${formatCompact(lvl.qty)} @ ${denom}${formatNumber(lvl.price)}`;
+              return `${lvl.side === "bid" ? "Bid" : "Ask"}: ${formatCompact(lvl.qty)} @ ${denom}${formatNumber(lvl.price, currentModalCoinId)}`;
             }
           }
         }
@@ -2865,9 +2927,9 @@ async function runPatternAnalysis() {
     const sym = currencySymbol();
     const lineDescs = userLines.map(l => {
       const fmt = ts => new Date(ts).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
-      if (l.type === "horizontal") return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y)}`;
-      if (l.type === "channel") return `• Κανάλι τάσης: (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)}), offset ${sym}${formatNumber(Math.abs(l.offset || 0))}`;
-      return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)})`;
+      if (l.type === "horizontal") return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y, currentModalCoinId)}`;
+      if (l.type === "channel") return `• Κανάλι τάσης: (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y, currentModalCoinId)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y, currentModalCoinId)}), offset ${sym}${formatNumber(Math.abs(l.offset || 0), currentModalCoinId)}`;
+      return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y, currentModalCoinId)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y, currentModalCoinId)})`;
     }).join("\n");
     userLinesSection = `\nΠαρατηρήσεις χρήστη:\n${lineDescs}\n`;
   }
@@ -3115,7 +3177,7 @@ function renderAnalysisResults(data, analysisCandles, tsByCandle, ohlcSummaryFor
       if (!f) return "";
       const icon = dirIcon[f.direction] || "→";
       const col = dirColor[f.direction] || "var(--text)";
-      const price = f.price ? `<strong style="color:${col}">${icon} ${sym}${formatNumber(f.price)}</strong>` : "";
+      const price = f.price ? `<strong style="color:${col}">${icon} ${sym}${formatNumber(f.price, currentModalCoinId)}</strong>` : "";
       return `<div class="analysis-finding">
         <div class="finding-dot" style="background:${col}"></div>
         <div><span style="color:var(--text-dim);font-size:0.8rem;">${label}</span>
@@ -3618,7 +3680,7 @@ function refreshUserLineSelectionUI() {
 
     let desc = typeLabel[line.type] || line.type;
     if (line.type === "horizontal") {
-      desc += ` ${sym}${formatNumber(line.p1.y)}`;
+      desc += ` ${sym}${formatNumber(line.p1.y, currentModalCoinId)}`;
     } else if (line.type === "trend" || line.type === "channel") {
       const d1 = new Date(line.p1.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
       const d2 = new Date(line.p2.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
@@ -3726,7 +3788,7 @@ const manualLinesPlugin = {
     }
 
     function drawPriceLabel(ypx, price, color) {
-      const text = currencySymbol() + formatNumber(price);
+      const text = currencySymbol() + formatNumber(price, currentModalCoinId);
       ctx.save();
       ctx.font = "12px sans-serif";
       const padding = 4;
@@ -3950,7 +4012,7 @@ const currentPricePlugin = {
     ctx.restore();
 
     // Price label badge on the left
-    const text = currencySymbol() + formatNumber(price);
+    const text = currencySymbol() + formatNumber(price, currentModalCoinId);
     ctx.save();
     ctx.font = "bold 12px sans-serif";
     const padding = 5;
@@ -3993,10 +4055,10 @@ function updateOhlcTicker(o, h, l, c, v) {
   const volPart = (v !== undefined && v !== null && v > 0)
     ? ` Vol:<b style="color:#4f8cff">${formatCompact(v)}</b>` : "";
   el.innerHTML =
-    `O:<b style="color:var(--text)">${s}${formatNumber(o)}</b> ` +
-    `H:<b style="color:var(--green)">${s}${formatNumber(h)}</b> ` +
-    `L:<b style="color:var(--red)">${s}${formatNumber(l)}</b> ` +
-    `C:<b style="color:var(--text)">${s}${formatNumber(c)}</b>` +
+    `O:<b style="color:var(--text)">${s}${formatNumber(o, currentModalCoinId)}</b> ` +
+    `H:<b style="color:var(--green)">${s}${formatNumber(h, currentModalCoinId)}</b> ` +
+    `L:<b style="color:var(--red)">${s}${formatNumber(l, currentModalCoinId)}</b> ` +
+    `C:<b style="color:var(--text)">${s}${formatNumber(c, currentModalCoinId)}</b>` +
     volPart;
 }
 
@@ -4022,7 +4084,7 @@ bigChartCanvas.addEventListener("click", (evt) => {
     const { x, y } = dataCoordsFromEvent(evt);
     const color = evt.shiftKey ? "#ef4444" : "#22c55e"; // Shift=red, normal=green
     const label = evt.altKey ? (window.prompt("Ετικέτα flag:", "") || "") : "";
-    const priceLabel = currencySymbol() + formatNumber(y);
+    const priceLabel = currencySymbol() + formatNumber(y, currentModalCoinId);
     chartFlags.push({ id: Date.now(), x, y, color, label, priceLabel });
     bigChart.update();
     return;
@@ -4178,7 +4240,7 @@ bigChartCanvas.addEventListener("click", (evt) => {
       p2: { x: xMax, y }
     });
     setActiveTool(null);
-    modalHint.textContent = `Η οριζόντια γραμμή προστέθηκε στο ${currencySymbol()}${formatNumber(y)}. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.`;
+    modalHint.textContent = `Η οριζόντια γραμμή προστέθηκε στο ${currencySymbol()}${formatNumber(y, currentModalCoinId)}. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.`;
     bigChart.update();
     refreshUserLineSelectionUI();
   }
@@ -4336,7 +4398,7 @@ bigChartCanvas.addEventListener("mousemove", (evt) => {
         // Keep both endpoints at the same y; preserve full-width x span
         line.p1.y = y;
         line.p2.y = y;
-        modalHint.textContent = `Οριζόντια γραμμή: ${currencySymbol()}${formatNumber(y)}`;
+        modalHint.textContent = `Οριζόντια γραμμή: ${currencySymbol()}${formatNumber(y, currentModalCoinId)}`;
       } else if (line.type === "channel" && (dragState.endpoint === "p1b" || dragState.endpoint === "p2b")) {
         // Dragging the parallel line — update the channel offset
         const ep = dragState.endpoint === "p1b" ? "p1" : "p2";
@@ -4481,6 +4543,9 @@ function openChartModal(coinId, name, symbol) {
     : dataSource === "binance" ? "Binance"
     : "CoinGecko";
   modalTitle.textContent = `${name} (${symbol.toUpperCase()}) — Candlestick (${sourceLabel})`;
+
+  const decSel = document.getElementById("modalDecimalsSelect");
+  if (decSel) decSel.value = String(getDecimalsFor(coinId));
 
   resetDrawings();
   const sel = document.getElementById("timeframeSelect");
@@ -4945,7 +5010,7 @@ function computeRegression() {
   regStatsEl.innerHTML = `
     <div>Τάση: <b>${trendWord}</b></div>
     <div>Μεταβολή στο διάστημα: <b>${totalChangePct >= 0 ? '+' : ''}${totalChangePct.toFixed(2)}%</b></div>
-    <div>Κλίση / ημέρα: <b>${currencySymbol()}${formatNumber(slopePerDay)}</b></div>
+    <div>Κλίση / ημέρα: <b>${currencySymbol()}${formatNumber(slopePerDay, currentModalCoinId)}</b></div>
   `;
 
   if (bigChart) bigChart.update();

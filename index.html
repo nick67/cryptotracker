@@ -311,15 +311,24 @@
 </div>
 
 <!-- SPLIT VIEW MODAL: side-by-side comparison of two coins -->
-<div class="modal-overlay" id="splitViewModal">
-  <div class="modal-box" style="max-width:1400px;">
+<div class="modal-overlay" id="splitViewModal" style="z-index:150;">
+  <div class="modal-box" id="splitViewBox">
     <div class="modal-head">
       <h2>⚏ Σύγκριση διαγραμμάτων</h2>
+      <button class="icon-btn" id="splitFullscreenBtn" title="Πλήρης οθόνη" style="font-size:1.2rem; margin-left:0.6rem;">⛶</button>
       <button class="icon-btn" id="closeSplitViewBtn" style="font-size:1.4rem;">✕</button>
     </div>
     <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; align-items:center;">
       <select id="splitCoinSelectA" style="background:var(--panel-2); color:#4f8cff; border:1px solid #4f8cff; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitTypeSelectA" title="Τύπος διαγράμματος (αριστερά)" style="background:var(--panel-2); color:#4f8cff; border:1px solid #4f8cff; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="candle">Candlestick</option>
+        <option value="line">Γραμμή</option>
+      </select>
       <select id="splitCoinSelectB" style="background:var(--panel-2); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitTypeSelectB" title="Τύπος διαγράμματος (δεξιά)" style="background:var(--panel-2); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="candle">Candlestick</option>
+        <option value="line">Γραμμή</option>
+      </select>
       <select id="splitTimeframeSelect" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
         <option value="1m|120">1λ (2ω)</option>
         <option value="5m|288" selected>5λ</option>
@@ -2727,16 +2736,40 @@ document.getElementById("splitViewBtn").addEventListener("click", () => {
   loadSplitCharts();
 });
 document.getElementById("closeSplitViewBtn").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen();
   document.getElementById("splitViewModal").classList.remove("open");
 });
 document.getElementById("splitRefreshBtn").addEventListener("click", loadSplitCharts);
 document.getElementById("splitCoinSelectA").addEventListener("change", loadSplitCharts);
 document.getElementById("splitCoinSelectB").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTypeSelectA").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTypeSelectB").addEventListener("change", loadSplitCharts);
 document.getElementById("splitTimeframeSelect").addEventListener("change", loadSplitCharts);
+
+// Fullscreen toggle using the browser Fullscreen API — expands the whole
+// split-view box to fill the physical screen (not just the browser window).
+document.getElementById("splitFullscreenBtn").addEventListener("click", () => {
+  const box = document.getElementById("splitViewBox");
+  if (!document.fullscreenElement) {
+    box.requestFullscreen?.().catch(err => console.error("Fullscreen error:", err));
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  const btn = document.getElementById("splitFullscreenBtn");
+  if (!btn) return;
+  btn.textContent = document.fullscreenElement ? "⛴" : "⛶";
+  btn.title = document.fullscreenElement ? "Έξοδος πλήρους οθόνης" : "Πλήρης οθόνη";
+  // Charts need a resize nudge after entering/exiting fullscreen
+  setTimeout(() => { splitChartA?.resize(); splitChartB?.resize(); }, 150);
+});
 
 async function loadSplitCharts() {
   const coinA = document.getElementById("splitCoinSelectA").value;
   const coinB = document.getElementById("splitCoinSelectB").value;
+  const typeA = document.getElementById("splitTypeSelectA").value;
+  const typeB = document.getElementById("splitTypeSelectB").value;
   const [interval, limit] = document.getElementById("splitTimeframeSelect").value.split("|");
 
   document.getElementById("splitTitleA").textContent = latestMarketData[coinA]?.name || coinA;
@@ -2747,49 +2780,85 @@ async function loadSplitCharts() {
       fetchCandlesForCoin(coinA, interval, parseInt(limit)),
       fetchCandlesForCoin(coinB, interval, parseInt(limit))
     ]);
-    renderSplitChart("splitChartA", candlesA, coinA, parseInt(limit));
-    renderSplitChart("splitChartB", candlesB, coinB, parseInt(limit));
+    renderSplitChart("splitChartA", candlesA, coinA, parseInt(limit), typeA);
+    renderSplitChart("splitChartB", candlesB, coinB, parseInt(limit), typeB);
   } catch (err) {
     console.error("Split view load error:", err);
   }
 }
 
-function renderSplitChart(canvasId, candles, coinId, limit) {
+function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
   const canvas = document.getElementById(canvasId);
   const visible = candles.length > limit ? candles.slice(-limit) : candles;
-  const ohlcData = visible.map(c => ({ x: c[0], o: c[1], h: c[2], l: c[3], c: c[4] }));
 
   const existing = canvasId === "splitChartA" ? splitChartA : splitChartB;
   if (existing) existing.destroy();
 
-  const chart = new Chart(canvas, {
-    type: "scatter",
-    data: {
-      datasets: [{
-        label: "OHLC",
-        data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c })),
-        candleData: true,
-        upColor: "#3ddc97",
-        downColor: "#ff5c6c"
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: { legend: { display: false }, tooltip: { enabled: true,
-        callbacks: { label: (ctx) => {
-          const d = ctx.raw;
-          const s = currencySymbol();
-          return `O:${formatNumber(d.o,coinId)} H:${formatNumber(d.h,coinId)} L:${formatNumber(d.l,coinId)} C:${formatNumber(d.c,coinId)}`;
-        }}
-      }},
-      scales: {
-        x: { type: "time", time: { unit: limit > 200 ? "day" : "hour" }, ticks: { color: "#9aa1ac", maxTicksLimit: 8 }, grid: { color: "rgba(255,255,255,0.05)" } },
-        y: { ticks: { color: "#9aa1ac", callback: (v) => currencySymbol() + formatNumber(v, coinId) }, grid: { color: "rgba(255,255,255,0.05)" } }
+  const commonScales = {
+    x: { type: "time", time: { unit: limit > 200 ? "day" : "hour" }, ticks: { color: "#9aa1ac", maxTicksLimit: 8 }, grid: { color: "rgba(255,255,255,0.05)" } },
+    y: { ticks: { color: "#9aa1ac", callback: (v) => currencySymbol() + formatNumber(v, coinId) }, grid: { color: "rgba(255,255,255,0.05)" } }
+  };
+
+  let chart;
+  if (chartType === "line") {
+    const lineColor = canvasId === "splitChartA" ? "#4f8cff" : "#f59e0b";
+    chart = new Chart(canvas, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Τιμή",
+          data: visible.map(c => ({ x: c[0], y: c[4] })),
+          borderColor: lineColor,
+          backgroundColor: lineColor + "22",
+          fill: true,
+          pointRadius: 0,
+          borderWidth: 1.8,
+          tension: 0.15
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${currencySymbol()}${formatNumber(ctx.parsed.y, coinId)}` } }
+        },
+        scales: commonScales
       }
-    }
-  });
+    });
+  } else {
+    const ohlcData = visible.map(c => ({ x: c[0], y: c[4], o: c[1], h: c[2], l: c[3], c: c[4] }));
+    chart = new Chart(canvas, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "OHLC",
+          data: ohlcData,
+          candleData: true,
+          upColor: "#3ddc97",
+          downColor: "#ff5c6c"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const d = ctx.raw;
+                return `O:${formatNumber(d.o,coinId)} H:${formatNumber(d.h,coinId)} L:${formatNumber(d.l,coinId)} C:${formatNumber(d.c,coinId)}`;
+              }
+            }
+          }
+        },
+        scales: commonScales
+      }
+    });
+  }
 
   if (canvasId === "splitChartA") splitChartA = chart; else splitChartB = chart;
 }

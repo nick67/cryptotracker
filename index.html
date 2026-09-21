@@ -245,6 +245,15 @@
     <p class="subtitle">Τιμές, μεταβολές, candlestick διαγράμματα και ανάλυση τάσεων από το CoinGecko (δωρεάν δημόσιο API).</p>
   </div>
   <div style="display:flex; align-items:center; gap:0.5rem;">
+    <label style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:0.3rem;">
+      Δεκαδικά (προεπιλογή):
+      <select id="decimalsSelect" style="background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:0.2rem 0.4rem; font-size:0.78rem; cursor:pointer;">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </label>
     <span id="syncStatusIndicator" style="font-size:0.78rem; color:var(--text-dim);"></span>
     <button id="cloudSyncBtn">☁ Cloud Sync</button>
   </div>
@@ -298,6 +307,53 @@
       <canvas id="orderBookChart"></canvas>
     </div>
     <div id="orderBookSummary" style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:0.8rem; font-size:0.85rem; color:var(--text-dim);"></div>
+  </div>
+</div>
+
+<!-- SPLIT VIEW MODAL: side-by-side comparison of two coins -->
+<div class="modal-overlay" id="splitViewModal" style="z-index:150;">
+  <div class="modal-box" id="splitViewBox">
+    <div class="modal-head">
+      <h2>⚏ Σύγκριση διαγραμμάτων</h2>
+      <button class="icon-btn" id="splitFullscreenBtn" title="Πλήρης οθόνη" style="font-size:1.2rem; margin-left:0.6rem;">⛶</button>
+      <button class="icon-btn" id="closeSplitViewBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; align-items:center;">
+      <select id="splitCoinSelectA" style="background:var(--panel-2); color:#4f8cff; border:1px solid #4f8cff; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitTypeSelectA" title="Τύπος διαγράμματος (αριστερά)" style="background:var(--panel-2); color:#4f8cff; border:1px solid #4f8cff; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="candle">Candlestick</option>
+        <option value="line">Γραμμή</option>
+      </select>
+      <select id="splitCoinSelectB" style="background:var(--panel-2); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;"></select>
+      <select id="splitTypeSelectB" title="Τύπος διαγράμματος (δεξιά)" style="background:var(--panel-2); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="candle">Candlestick</option>
+        <option value="line">Γραμμή</option>
+      </select>
+      <select id="splitTimeframeSelect" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="1m|120">1λ (2ω)</option>
+        <option value="5m|288" selected>5λ</option>
+        <option value="15m|288">15λ</option>
+        <option value="1h|168">1ω</option>
+        <option value="4h|360">4ω</option>
+        <option value="1d|365">1ημ</option>
+        <option value="1w|104">1εβδ</option>
+      </select>
+      <button id="splitRefreshBtn" style="border-color:#22c55e; color:#22c55e;">↻ Ανανέωση</button>
+    </div>
+    <div style="display:flex; gap:1rem; flex:1; min-height:0;">
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+        <div id="splitTitleA" style="font-size:0.9rem; font-weight:600; color:#4f8cff; margin-bottom:0.4rem;"></div>
+        <div style="position:relative; flex:1; min-height:400px;">
+          <canvas id="splitChartA"></canvas>
+        </div>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+        <div id="splitTitleB" style="font-size:0.9rem; font-weight:600; color:#f59e0b; margin-bottom:0.4rem;"></div>
+        <div style="position:relative; flex:1; min-height:400px;">
+          <canvas id="splitChartB"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -447,42 +503,70 @@
 <footer>
   Σημείωση: το δωρεάν API του CoinGecko δεν παρέχει πραγματικό βιβλίο εντολών (bid/ask).
   Ως πλησιέστερα διαθέσιμα στοιχεία προσφοράς/ζήτησης εμφανίζονται το 24ω υψηλό και χαμηλό.
-  Αυτόματη ανανέωση κάθε 15 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
+  Αυτόματη ανανέωση κάθε 30 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
 </footer>
 
 <!-- CHART MODAL -->
 <div class="modal-overlay" id="chartModal">
   <div class="modal-box">
     <div class="modal-head">
-      <h2 id="modalTitle">Διάγραμμα</h2>
+      <button class="icon-btn" id="modalHomeBtn" title="Επιστροφή στην αρχική" style="font-size:1.1rem;">🏠</button>
+      <select id="modalCoinSwitch" title="Εναλλαγή νομίσματος" style="background:var(--panel-2); color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:0.28rem 0.5rem; font-size:0.85rem; cursor:pointer; font-weight:600; margin-left:0.5rem; max-width:220px;">
+      </select>
+      <h2 id="modalTitle" style="display:none;">Διάγραμμα</h2>
+      <select id="modalDecimalsSelect" title="Δεκαδικά ψηφία γι' αυτό το νόμισμα" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.75rem; padding:0.15rem 0.3rem; cursor:pointer; margin-left:0.6rem;">
+        <option value="1">.1</option>
+        <option value="2">.2</option>
+        <option value="3">.3</option>
+        <option value="4">.4</option>
+      </select>
+      <button class="icon-btn" id="splitViewBtn" title="Διπλό παράθυρο σύγκρισης" style="font-size:1.1rem; margin-left:0.4rem;">⚏</button>
       <span id="modalOhlcTicker" style="font-size:0.85rem; color:var(--text-dim); margin-left:auto; margin-right:1rem; font-family:monospace;"></span>
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
     </div>
     <div class="modal-tools">
-      <select id="timeframeSelect" style="background:#1a1f2e;color:#f59e0b;border:1px solid #f59e0b;border-radius:6px;padding:0.3rem 0.5rem;font-size:0.85rem;cursor:pointer;">
-        <option value="1m|120" style="background:#1a1f2e;color:#f59e0b;">2ω (1λ)</option>
-        <option value="5m|288" style="background:#1a1f2e;color:#f59e0b;">24ω</option>
-        <option value="1h|168" style="background:#1a1f2e;color:#f59e0b;">7ημ</option>
-        <option value="1d|365" style="background:#1a1f2e;color:#f59e0b;">1έτος</option>
+      <!-- Timeframe dropdown (πορτοκαλί) -->
+      <select id="timeframeSelect" style="background:#1a1f2e;color:#f97316;border:1px solid #f97316;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;">
+        <option value="1m|120"   style="background:#1a1f2e;color:#f97316;">⏱ 1λ (2ω)</option>
+        <option value="5m|288"   style="background:#1a1f2e;color:#f97316;">⏱ 5λ</option>
+        <option value="15m|288"  style="background:#1a1f2e;color:#f97316;">⏱ 15λ</option>
+        <option value="1h|168"   style="background:#1a1f2e;color:#f97316;">⏱ 1ω</option>
+        <option value="4h|360"   style="background:#1a1f2e;color:#f97316;">⏱ 4ω</option>
+        <option value="1d|365"   style="background:#1a1f2e;color:#f97316;">⏱ 1ημ</option>
+        <option value="1w|104"   style="background:#1a1f2e;color:#f97316;">⏱ 1εβδ</option>
       </select>
-      <div id="subIntervalToggle" style="display:none; gap:0.3rem;">
-        <!-- filled dynamically per selected timeframe -->
-      </div>
-      <button id="regressionBtn">📉 Γραμμική παλινδρόμηση</button>
-      <button id="trendlineBtn">📈 Γραμμή τάσης (κλικ 2 σημείων)</button>
-      <button id="channelBtn">📊 Κανάλι τάσης (κλικ 2 σημείων)</button>
-      <button id="hlineBtn">➖ Οριζόντια γραμμή (κλικ 1 σημείου)</button>
-      <button id="toggleLinesBtn" title="Εμφάνιση/απόκρυψη γραμμών" style="border-color:#a78bfa;color:#a78bfa;">👁 Γραμμές</button>
-      <button id="editLinesBtn">✥ Μετακίνηση/επέκταση γραμμών</button>
-      <button id="deleteLinesBtn" style="border-color:#ef4444;color:#ef4444;">🗑 Διαγραφή γραμμής (κλικ)</button>
-      <button id="clearLinesBtn" style="border-color:#ef4444;color:#ef4444;">✕ Καθαρισμός γραμμών</button>
-      <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻ Ανανέωση</button>
-      <button id="autoRefreshBtn" title="Αυτόματη ανανέωση κάθε 15δλ" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
-      <button id="bookmarkBtn" title="Αποθήκευση bookmark" style="border-color:#f59e0b;color:#f59e0b;">🔖 Bookmark</button>
-      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢ Reset zoom</button>
-      <button id="snapshotBtn">📸 Αποθήκευση</button>
-      <button id="orderBookBtn">📶 Προσφορά/Ζήτηση</button>
-      <button id="analyzeBtn">🤖 Ανάλυση σχηματισμών</button>
+
+      <!-- Drawing tools dropdown (μωβ) -->
+      <select id="drawingToolSelect" style="background:#1a1f2e;color:#a78bfa;border:1px solid #a78bfa;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;">
+        <option value="" style="background:#1a1f2e;color:#a78bfa;">✏ Εργαλεία</option>
+        <option value="regression" style="background:#1a1f2e;color:#a78bfa;">📉 Παλινδρόμηση</option>
+        <option value="trend"      style="background:#1a1f2e;color:#a78bfa;">📈 Γραμμή τάσης</option>
+        <option value="channel"    style="background:#1a1f2e;color:#a78bfa;">📊 Κανάλι τάσης</option>
+        <option value="hline"      style="background:#1a1f2e;color:#a78bfa;">➖ Οριζόντια γραμμή</option>
+        <option value="toggleLines"style="background:#1a1f2e;color:#a78bfa;">👁 Εμφάνιση/απόκρυψη</option>
+        <option value="edit"       style="background:#1a1f2e;color:#a78bfa;">✥ Μετακίνηση</option>
+        <option value="delete"     style="background:#1a1f2e;color:#a78bfa;">🗑 Διαγραφή γραμμής</option>
+        <option value="clear"      style="background:#1a1f2e;color:#a78bfa;">✕ Καθαρισμός όλων</option>
+      </select>
+      <!-- Hidden original buttons (still needed for JS handlers) -->
+      <span style="display:none;">
+        <button id="regressionBtn"></button>
+        <button id="trendlineBtn"></button>
+        <button id="channelBtn"></button>
+        <button id="hlineBtn"></button>
+        <button id="toggleLinesBtn"></button>
+        <button id="editLinesBtn"></button>
+        <button id="deleteLinesBtn"></button>
+        <button id="clearLinesBtn"></button>
+      </span>
+
+      <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻</button>
+      <button id="autoRefreshBtn" title="Αυτόματη ανανέωση" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
+      <button id="bookmarkBtn" title="Flag στο διάγραμμα" style="border-color:#6b7280;color:#9aa1ac;">🔖 Flag</button>
+      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢</button>
+      <button id="snapshotBtn" style="border-color:#6b7280;color:#9aa1ac;">📸</button>
+      <button id="orderBookBtn">📶 Βιβλίο</button>
+      <button id="analyzeBtn">🤖 Ανάλυση</button>
       <span class="hint" id="modalHint"></span>
     </div>
 
@@ -634,6 +718,24 @@
 <script>
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
+// Per-coin decimal place overrides. Falls back to DEFAULT_DECIMALS when a
+// coin has no override set. Stored as { coinId: 1-4 }.
+const DECIMALS_KEY = "crypto_tracker_decimals_v1";
+const DEFAULT_DECIMALS_KEY = "crypto_tracker_default_decimals_v1";
+let coinDecimals = {};
+try { coinDecimals = JSON.parse(localStorage.getItem(DECIMALS_KEY) || "{}"); } catch { coinDecimals = {}; }
+let defaultDecimals = parseInt(localStorage.getItem(DEFAULT_DECIMALS_KEY)) || 2;
+if (defaultDecimals < 1 || defaultDecimals > 4) defaultDecimals = 2;
+
+function getDecimalsFor(coinId) {
+  if (coinId && coinDecimals[coinId] !== undefined) return coinDecimals[coinId];
+  return defaultDecimals;
+}
+function setDecimalsFor(coinId, decimals) {
+  coinDecimals[coinId] = decimals;
+  localStorage.setItem(DECIMALS_KEY, JSON.stringify(coinDecimals));
+}
+
 // Vertical crosshair line at cursor position
 const crosshairPlugin = {
   id: "crosshair",
@@ -681,7 +783,7 @@ const crosshairPlugin = {
 
       // Y-axis price label
       const price = scales.y.getValueForPixel(this._y);
-      const priceText = currencySymbol() + formatNumber(price);
+      const priceText = currencySymbol() + formatNumber(price, currentModalCoinId);
       ctx.setLineDash([]);
       ctx.font = "bold 11px sans-serif";
       const pw = ctx.measureText(priceText).width + 8;
@@ -754,8 +856,8 @@ const KRAKEN_INTERVAL_MAP = {
   "30m": 30,
   "1h":  60,
   "4h":  240,
-  "6h":  360,
-  "12h": 720,
+  "6h":  240,   // Kraken δεν υποστηρίζει 6h → 4h
+  "12h": 1440,  // Kraken δεν υποστηρίζει 12h → 1d
   "1d":  1440,
   "1w":  10080
 };
@@ -1095,6 +1197,19 @@ function populateSelects() {
   tvSelect.addEventListener("change", loadTradingViewWidget);
 }
 populateSelects();
+
+/* ---------- Default decimal places (used when a coin has no override) ---------- */
+(function initDecimalsSelector() {
+  const sel = document.getElementById("decimalsSelect");
+  if (!sel) return;
+  sel.value = String(defaultDecimals);
+  sel.addEventListener("change", () => {
+    defaultDecimals = parseInt(sel.value);
+    localStorage.setItem(DEFAULT_DECIMALS_KEY, String(defaultDecimals));
+    loadData();
+    if (bigChart) renderBigChart();
+  });
+})();
 
 /* ---------- TradingView widget ---------- */
 function loadTradingViewWidget() {
@@ -1700,12 +1815,10 @@ function computeHoldings() {
 }
 
 /* ---------- Formatting ---------- */
-function formatNumber(n, decimalsSmall = 4) {
+function formatNumber(n, coinId) {
   if (n === null || n === undefined) return "—";
-  if (Math.abs(n) >= 1) {
-    return n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-  }
-  return n.toLocaleString(undefined, { maximumFractionDigits: decimalsSmall, minimumFractionDigits: 2 });
+  const d = getDecimalsFor(coinId);
+  return n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 function formatQty(n) {
   if (n === null || n === undefined) return "—";
@@ -1775,15 +1888,15 @@ function renderCards(coins) {
     const bidAskBlock = ba
       ? `<div class="badge-note" style="color:var(--green); background:rgba(61,220,151,0.1); border-color:rgba(61,220,151,0.25);">Bid/Ask πραγματικού χρόνου (${ba.source}${ba.denom === "USDT" ? ", USDT≈USD" : ""})</div>
          <div class="rows">
-           <div>Bid (προσφορά αγοράς): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.bid)}</b></div>
-           <div>Ask (ζήτηση πώλησης): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.ask)}</b></div>
+           <div>Bid (προσφορά αγοράς): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.bid, coin.id)}</b></div>
+           <div>Ask (ζήτηση πώλησης): <b>${ba.denom === "EUR" ? "€" : "$"}${formatNumber(ba.ask, coin.id)}</b></div>
            <div>Spread: <b>${(((ba.ask - ba.bid) / ba.bid) * 100).toFixed(3)}%</b></div>
            <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
          </div>`
       : `<div class="badge-note">Bid/Ask μη διαθέσιμα · εμφανίζονται 24ω χαμηλό/υψηλό</div>
          <div class="rows">
-           <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h)}</b></div>
-           <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h)}</b></div>
+           <div>24ω Υψηλό (≈ ask εύρος): <b>${symbol}${formatNumber(coin.high_24h, coin.id)}</b></div>
+           <div>24ω Χαμηλό (≈ bid εύρος): <b>${symbol}${formatNumber(coin.low_24h, coin.id)}</b></div>
            <div>Όγκος 24ω: <b>${symbol}${formatCompact(coin.total_volume)}</b></div>
            <div>Κεφαλαιοποίηση: <b>${symbol}${formatCompact(coin.market_cap)}</b></div>
          </div>`;
@@ -1796,11 +1909,17 @@ function renderCards(coins) {
           <span class="ticker">${coin.symbol}</span>
         </div>
         <div class="head-actions">
+          <select class="decimals-select" data-coin="${coin.id}" title="Δεκαδικά ψηφία για ${coin.name}" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.7rem; padding:0.1rem 0.2rem; cursor:pointer;">
+            <option value="1">.1</option>
+            <option value="2">.2</option>
+            <option value="3">.3</option>
+            <option value="4">.4</option>
+          </select>
           <button class="icon-btn expand" title="Μεγέθυνση διαγράμματος" data-id="${coin.id}" data-name="${coin.name}">⛶</button>
           <button class="icon-btn remove" title="Αφαίρεση" data-id="${coin.id}">✕</button>
         </div>
       </div>
-      <div class="price">${symbol}${formatNumber(coin.current_price)}</div>
+      <div class="price">${symbol}${formatNumber(coin.current_price, coin.id)}</div>
       <div class="change ${isPos ? 'pos' : 'neg'}">
         ${isPos ? '▲' : '▼'} ${change === null || change === undefined ? '—' : Math.abs(change).toFixed(2) + '%'} (24ω)
       </div>
@@ -1809,6 +1928,12 @@ function renderCards(coins) {
     `;
     card.querySelector(".remove").addEventListener("click", () => removeCoin(coin.id));
     card.querySelector(".expand").addEventListener("click", () => openChartModal(coin.id, coin.name, coin.symbol));
+    const decSel = card.querySelector(".decimals-select");
+    decSel.value = String(getDecimalsFor(coin.id));
+    decSel.addEventListener("change", () => {
+      setDecimalsFor(coin.id, parseInt(decSel.value));
+      loadData(); // re-render with new formatting
+    });
     grid.appendChild(card);
 
     const canvas = card.querySelector("canvas");
@@ -2166,9 +2291,15 @@ async function fetchMarketDataFor(ids, retries = 2) {
     const res = await fetch(url);
 
     if (res.status === 429) {
-      // Rate limited — wait and retry
-      if (retries > 0) {
+      // Rate limited — show cached data immediately, then retry
+      if (attempt === 1) {
+        const cached = watchlist.map(id => latestMarketData[id]).filter(Boolean);
+        if (cached.length > 0 && typeof renderCards === 'function') {
+          renderCards(cached); // keep UI populated during wait
+        }
         statusEl.textContent = "Rate limit CoinGecko — επαναπροσπάθεια σε 8 δλ...";
+      }
+      if (retries > 0) {
         await new Promise(r => setTimeout(r, 8000));
         return fetchMarketDataFor(ids, retries - 1);
       }
@@ -2234,8 +2365,8 @@ const $userLinesHint    = () => document.getElementById("userLinesHint");
 
 let bigChart = null;
 let currentModalCoinId = null;
-let currentInterval = "1h";
-let currentLimit = 168;
+let currentInterval = "5m";
+let currentLimit = 288;
 let currentModalSymbol = "";
 let dataSource = "binance"; // "binance" | "kraken" | "coingecko"
 
@@ -2252,18 +2383,44 @@ let lineIdCounter = 0;
 
 // Drag state for edit mode
 let dragState = null; // { lineId, endpoint: 'p1'|'p2' }
+let panState = null;  // { startX, startY, xMin, xMax, yMin, yMax } for Ctrl+drag / middle-button pan
 const HIT_RADIUS_PX = 10;
 
 document.getElementById("closeModalBtn").addEventListener("click", closeChartModal);
 
+document.getElementById("modalDecimalsSelect").addEventListener("change", (e) => {
+  if (!currentModalCoinId) return;
+  setDecimalsFor(currentModalCoinId, parseInt(e.target.value));
+  if (bigChart) renderBigChart();
+});
+
+// Timeframe dropdown
 document.getElementById("timeframeSelect").addEventListener("change", (e) => {
   const [interval, limit] = e.target.value.split("|");
   currentInterval = interval;
   currentLimit = parseInt(limit);
-  const label = e.target.options[e.target.selectedIndex].text;
-  updateSubIntervalRow(label);
   resetDrawings();
   loadModalChart();
+});
+
+// Drawing tools dropdown — maps option values to existing button click handlers
+document.getElementById("drawingToolSelect").addEventListener("change", (e) => {
+  const val = e.target.value;
+  e.target.selectedIndex = 0; // always reset to placeholder after action
+  if (!val) return;
+  if (val === "regression")    { computeRegression(); }
+  else if (val === "trend")    { setActiveTool(activeTool === "trend"    ? null : "trend"); }
+  else if (val === "channel")  { setActiveTool(activeTool === "channel"  ? null : "channel"); }
+  else if (val === "hline")    { setActiveTool(activeTool === "hline"    ? null : "hline"); }
+  else if (val === "edit")     { setActiveTool(activeTool === "edit"     ? null : "edit"); }
+  else if (val === "delete")   { setActiveTool(activeTool === "delete"   ? null : "delete"); }
+  else if (val === "clear")    { resetDrawings(); renderBigChart(); }
+  else if (val === "toggleLines") {
+    linesVisible = !linesVisible;
+    const btn = document.getElementById("toggleLinesBtn");
+    if (btn) { btn.style.opacity = linesVisible ? "1" : "0.4"; btn.textContent = linesVisible ? "👁 Γραμμές" : "🚫 Γραμμές"; }
+    if (bigChart) bigChart.update();
+  }
 });
 
 document.getElementById("trendlineBtn").addEventListener("click", () => {
@@ -2311,71 +2468,6 @@ document.getElementById("modalRefreshBtn").addEventListener("click", () => {
 
 /* ---- Sub-interval selector ---- */
 // Map from main timeframe key → available sub-intervals [label, interval, limit]
-const SUB_INTERVALS = {
-  "24ω":    [["5λ","5m",288], ["15λ","15m",96]],
-  "7ημ":    [["30λ","30m",336], ["1ω","1h",168]],
-  "1έτος":  [["6ω","6h",1460], ["12ω","12h",730], ["1ημ","1d",365]]
-};
-
-function updateSubIntervalRow(mainLabel, preserveCurrent) {
-  const row = document.getElementById("subIntervalToggle");
-  const subs = SUB_INTERVALS[mainLabel];
-  if (!subs) { row.style.display = "none"; row.innerHTML = ""; return; }
-
-  row.innerHTML = subs.map(([label, interval, limit]) =>
-    `<button data-interval="${interval}" data-limit="${limit}">${label}</button>`
-  ).join("");
-  row.style.display = "flex";
-
-  // Preserve the current interval/limit if it matches one of this timeframe's
-  // sub-intervals (used when re-opening a chart mid-session); otherwise fall
-  // back to the first sub-interval as the default.
-  let activeIdx = 0;
-  if (preserveCurrent) {
-    const match = subs.findIndex(([, interval, limit]) => interval === currentInterval && limit === currentLimit);
-    if (match !== -1) {
-      activeIdx = match;
-    } else {
-      currentInterval = subs[0][1];
-      currentLimit = subs[0][2];
-    }
-  } else {
-    currentInterval = subs[0][1];
-    currentLimit = subs[0][2];
-  }
-
-  const buttons = row.querySelectorAll("button");
-  buttons.forEach((btn, i) => {
-    if (i === activeIdx) btn.classList.add("active");
-    btn.addEventListener("click", () => {
-      buttons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentInterval = btn.dataset.interval;
-      currentLimit = parseInt(btn.dataset.limit);
-      resetDrawings();
-      loadModalChart();
-    });
-  });
-}
-
-// Sync the timeframe <select> and sub-interval buttons to whatever
-// currentInterval/currentLimit currently hold (the last timeframe used this
-// session), without resetting them. Used when opening a chart modal.
-function syncTimeframeUI() {
-  const sel = document.getElementById("timeframeSelect");
-  if (!sel) return;
-  const val = `${currentInterval}|${currentLimit}`;
-  let idx = Array.from(sel.options).findIndex(o => o.value === val);
-  if (idx === -1) {
-    idx = Array.from(sel.options).findIndex(o => {
-      const subs = SUB_INTERVALS[o.text];
-      return subs && subs.some(([, iv, lim]) => iv === currentInterval && lim === currentLimit);
-    });
-  }
-  if (idx === -1) idx = 0;
-  sel.selectedIndex = idx;
-  updateSubIntervalRow(sel.options[idx].text, true);
-}
 
 /* ---- Auto-refresh ---- */
 let modalAutoRefreshTimer = null;
@@ -2418,7 +2510,7 @@ function drawChartFlags(chart) {
     if (yPx < chartArea.top  || yPx > chartArea.bottom) return;
 
     const color = flag.color || "#22c55e";
-    const stemH = 34;
+    const stemH = 50;
 
     ctx.save();
     // Vertical stem
@@ -2429,22 +2521,22 @@ function drawChartFlags(chart) {
     ctx.moveTo(xPx, yPx);
     ctx.lineTo(xPx, yPx - stemH);
     ctx.stroke();
-    // Flag triangle
+    // Flag triangle (wider + taller)
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(xPx, yPx - stemH);
-    ctx.lineTo(xPx + 20, yPx - stemH + 8);
-    ctx.lineTo(xPx, yPx - stemH + 16);
+    ctx.lineTo(xPx + 52, yPx - stemH + 11);
+    ctx.lineTo(xPx, yPx - stemH + 22);
     ctx.closePath();
     ctx.fill();
     // Price text inside flag
     const displayText = flag.label || flag.priceLabel || "";
     if (displayText) {
-      ctx.font = "bold 8px sans-serif";
+      ctx.font = "bold 10px sans-serif";
       ctx.fillStyle = "#0f1115";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(displayText.slice(0, 9), xPx + 2, yPx - stemH + 8);
+      ctx.fillText(displayText.slice(0, 12), xPx + 3, yPx - stemH + 11);
     }
     // Circle at base
     ctx.beginPath();
@@ -2458,12 +2550,16 @@ function drawChartFlags(chart) {
 
 document.getElementById("resetZoomBtn").addEventListener("click", () => {
   if (bigChart) {
-    // Clear manual y-axis override so it autoscales again
+    bigChart.options.scales.x.min = undefined;
+    bigChart.options.scales.x.max = undefined;
     bigChart.options.scales.y.min = undefined;
     bigChart.options.scales.y.max = undefined;
     bigChart.resetZoom();
   }
 });
+
+// Prevent browser context menu / autoscroll icon on middle button press
+bigChartCanvas.addEventListener("auxclick", (evt) => { if (evt.button === 1) evt.preventDefault(); });
 
 // Ctrl+wheel over the chart rescales the price (y) axis around the cursor;
 // plain wheel still zooms the time (x) axis via chartjs-plugin-zoom.
@@ -2492,9 +2588,8 @@ document.getElementById("snapshotBtn").addEventListener("click", async () => {
   if (!bigChart) return;
 
   const coinTitle = document.getElementById("modalTitle").textContent;
-  const sel = document.getElementById("timeframeSelect");
-  const subBtn = document.querySelector("#subIntervalToggle button.active");
-  const timeframe = (sel?.options[sel?.selectedIndex]?.text || "") + (subBtn ? " / " + subBtn.textContent.trim() : "");
+  const sel2 = document.getElementById("timeframeSelect");
+  const timeframe = sel2?.options[sel2?.selectedIndex]?.text?.replace(/⏱\s*/,"") || "";
   const dateStr = new Date().toLocaleString("el-GR", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit"
@@ -2610,6 +2705,231 @@ document.getElementById("orderBookModal").addEventListener("click", (e) => {
 });
 document.getElementById("orderBookRefreshBtn").addEventListener("click", loadOrderBook);
 
+/* =====================================================
+   SPLIT VIEW: side-by-side comparison of two coins
+   ===================================================== */
+let splitChartA = null, splitChartB = null;
+
+function populateSplitSelects() {
+  ["splitCoinSelectA", "splitCoinSelectB"].forEach((id, idx) => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = "";
+    watchlist.forEach(cid => {
+      const coin = latestMarketData[cid];
+      const opt = document.createElement("option");
+      opt.value = cid;
+      opt.textContent = coin ? `${coin.name} (${coin.symbol.toUpperCase()})` : cid;
+      sel.appendChild(opt);
+    });
+    // Default: A = current modal coin, B = next different coin in watchlist
+    if (idx === 0 && currentModalCoinId) sel.value = currentModalCoinId;
+    if (idx === 1) {
+      const other = watchlist.find(c => c !== (currentModalCoinId || watchlist[0]));
+      if (other) sel.value = other;
+    }
+  });
+}
+
+document.getElementById("splitViewBtn").addEventListener("click", () => {
+  populateSplitSelects();
+  document.getElementById("splitViewModal").classList.add("open");
+  loadSplitCharts();
+});
+document.getElementById("closeSplitViewBtn").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  document.getElementById("splitViewModal").classList.remove("open");
+});
+document.getElementById("splitRefreshBtn").addEventListener("click", loadSplitCharts);
+document.getElementById("splitCoinSelectA").addEventListener("change", loadSplitCharts);
+document.getElementById("splitCoinSelectB").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTypeSelectA").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTypeSelectB").addEventListener("change", loadSplitCharts);
+document.getElementById("splitTimeframeSelect").addEventListener("change", loadSplitCharts);
+
+// Fullscreen toggle using the browser Fullscreen API — expands the whole
+// split-view box to fill the physical screen (not just the browser window).
+document.getElementById("splitFullscreenBtn").addEventListener("click", () => {
+  const box = document.getElementById("splitViewBox");
+  if (!document.fullscreenElement) {
+    box.requestFullscreen?.().catch(err => console.error("Fullscreen error:", err));
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  const btn = document.getElementById("splitFullscreenBtn");
+  if (!btn) return;
+  btn.textContent = document.fullscreenElement ? "⛴" : "⛶";
+  btn.title = document.fullscreenElement ? "Έξοδος πλήρους οθόνης" : "Πλήρης οθόνη";
+  // Charts need a resize nudge after entering/exiting fullscreen
+  setTimeout(() => { splitChartA?.resize(); splitChartB?.resize(); }, 150);
+});
+
+async function loadSplitCharts() {
+  const coinA = document.getElementById("splitCoinSelectA").value;
+  const coinB = document.getElementById("splitCoinSelectB").value;
+  const typeA = document.getElementById("splitTypeSelectA").value;
+  const typeB = document.getElementById("splitTypeSelectB").value;
+  const [interval, limit] = document.getElementById("splitTimeframeSelect").value.split("|");
+
+  document.getElementById("splitTitleA").textContent = latestMarketData[coinA]?.name || coinA;
+  document.getElementById("splitTitleB").textContent = latestMarketData[coinB]?.name || coinB;
+
+  try {
+    const [candlesA, candlesB] = await Promise.all([
+      fetchCandlesForCoin(coinA, interval, parseInt(limit)),
+      fetchCandlesForCoin(coinB, interval, parseInt(limit))
+    ]);
+    renderSplitChart("splitChartA", candlesA, coinA, parseInt(limit), typeA);
+    renderSplitChart("splitChartB", candlesB, coinB, parseInt(limit), typeB);
+  } catch (err) {
+    console.error("Split view load error:", err);
+  }
+}
+
+function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
+  const canvas = document.getElementById(canvasId);
+  const visible = candles.length > limit ? candles.slice(-limit) : candles;
+
+  const existing = canvasId === "splitChartA" ? splitChartA : splitChartB;
+  if (existing) existing.destroy();
+
+  // Current price + change vs previous candle, shown in the title row
+  const last = visible[visible.length - 1];
+  const prev = visible[visible.length - 2];
+  const titleEl = document.getElementById(canvasId === "splitChartA" ? "splitTitleA" : "splitTitleB");
+  if (last) {
+    const isUp = prev ? last[4] >= prev[4] : true;
+    const color = isUp ? "#3ddc97" : "#ff5c6c";
+    const coinName = latestMarketData[coinId]?.name || coinId;
+    titleEl.innerHTML = `${coinName} &nbsp; <span style="color:${color}; font-weight:700;">${currencySymbol()}${formatNumber(last[4], coinId)} ${isUp ? "▲" : "▼"}</span>`;
+  }
+
+  const commonScales = {
+    x: { type: "time", time: { unit: limit > 200 ? "day" : "hour" }, ticks: { color: "#9aa1ac", maxTicksLimit: 8 }, grid: { color: "rgba(255,255,255,0.05)" } },
+    y: { ticks: { color: "#9aa1ac", callback: (v) => currencySymbol() + formatNumber(v, coinId) }, grid: { color: "rgba(255,255,255,0.05)" } }
+  };
+
+  let chart;
+  if (chartType === "line") {
+    const lineColor = canvasId === "splitChartA" ? "#4f8cff" : "#f59e0b";
+    chart = new Chart(canvas, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Τιμή",
+          data: visible.map(c => ({ x: c[0], y: c[4] })),
+          borderColor: lineColor,
+          backgroundColor: lineColor + "22",
+          fill: true,
+          pointRadius: 0,
+          borderWidth: 1.8,
+          tension: 0.15
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${currencySymbol()}${formatNumber(ctx.parsed.y, coinId)}` } }
+        },
+        scales: commonScales
+      }
+    });
+  } else {
+    const ohlcData = visible.map(c => ({ x: c[0], y: c[4], o: c[1], h: c[2], l: c[3], c: c[4] }));
+    chart = new Chart(canvas, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "OHLC",
+          data: ohlcData,
+          candleData: true,
+          upColor: "#3ddc97",
+          downColor: "#ff5c6c"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const d = ctx.raw;
+                return `O:${formatNumber(d.o,coinId)} H:${formatNumber(d.h,coinId)} L:${formatNumber(d.l,coinId)} C:${formatNumber(d.c,coinId)}`;
+              }
+            }
+          }
+        },
+        scales: commonScales
+      }
+    });
+  }
+
+  // Tag the chart instance with its coin so the shared crosshair plugin
+  // can format the price label with the right decimals.
+  chart.$coinId = coinId;
+
+  if (canvasId === "splitChartA") splitChartA = chart; else splitChartB = chart;
+}
+
+/* Horizontal crosshair with a price badge on the y-axis, for split-view
+   charts specifically. Registered once, globally — but keeps per-chart
+   state on the chart instance itself (chart.$crosshair) so the two split
+   charts don't interfere with each other or with the main bigChart. */
+const splitCrosshairPlugin = {
+  id: "splitCrosshair",
+  afterEvent(chart, args) {
+    if (chart.canvas.id !== "splitChartA" && chart.canvas.id !== "splitChartB") return;
+    const evt = args.event;
+    if (evt.type === "mousemove") {
+      const pos = Chart.helpers.getRelativePosition(evt, chart);
+      const inArea = pos.y >= chart.chartArea.top && pos.y <= chart.chartArea.bottom
+                  && pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right;
+      chart.$crosshair = inArea ? { y: pos.y } : null;
+    } else if (evt.type === "mouseout") {
+      chart.$crosshair = null;
+    }
+    args.changed = true;
+  },
+  afterDatasetsDraw(chart) {
+    if (chart.canvas.id !== "splitChartA" && chart.canvas.id !== "splitChartB") return;
+    const cross = chart.$crosshair;
+    if (!cross) return;
+    const { ctx, chartArea, scales } = chart;
+
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(200,200,200,0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, cross.y);
+    ctx.lineTo(chartArea.right, cross.y);
+    ctx.stroke();
+
+    const price = scales.y.getValueForPixel(cross.y);
+    const priceText = currencySymbol() + formatNumber(price, chart.$coinId);
+    ctx.setLineDash([]);
+    ctx.font = "bold 10px sans-serif";
+    const pw = ctx.measureText(priceText).width + 8;
+    const boxX = chartArea.left;
+    const boxY = cross.y - 9;
+    ctx.fillStyle = "rgba(60,70,90,0.92)";
+    ctx.fillRect(boxX, boxY, pw, 18);
+    ctx.fillStyle = "#e8eaed";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(priceText, boxX + pw / 2, cross.y);
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(splitCrosshairPlugin);
+
 async function loadOrderBook() {
   const statusEl4 = document.getElementById("orderBookStatus");
   const titleEl = document.getElementById("orderBookTitle");
@@ -2655,8 +2975,8 @@ async function loadOrderBook() {
     const totalAskVol = asks.reduce((s, a) => s + a[1], 0);
 
     summaryEl.innerHTML = `
-      <div>Καλύτερη προσφορά (bid): <b style="color:var(--green)">${denom}${formatNumber(bestBid)}</b></div>
-      <div>Καλύτερη ζήτηση (ask): <b style="color:var(--red)">${denom}${formatNumber(bestAsk)}</b></div>
+      <div>Καλύτερη προσφορά (bid): <b style="color:var(--green)">${denom}${formatNumber(bestBid, currentModalCoinId)}</b></div>
+      <div>Καλύτερη ζήτηση (ask): <b style="color:var(--red)">${denom}${formatNumber(bestAsk, currentModalCoinId)}</b></div>
       <div>Spread: <b>${spreadPct}%</b></div>
       <div>Όγκος bids: <b style="color:var(--green)">${formatCompact(totalBidVol)}</b></div>
       <div>Όγκος asks: <b style="color:var(--red)">${formatCompact(totalAskVol)}</b></div>
@@ -2680,7 +3000,7 @@ function renderOrderBookChart(bids, asks, denom) {
     ...asks.map(([price, qty]) => ({ price, qty, side: "ask" }))
   ].sort((a, b) => b.price - a.price);
 
-  const labels = levels.map(l => denom + formatNumber(l.price));
+  const labels = levels.map(l => denom + formatNumber(l.price, currentModalCoinId));
   const data = levels.map(l => l.qty);
   const colors = levels.map(l => l.side === "bid" ? "rgba(61,220,151,0.75)" : "rgba(255,92,108,0.75)");
   const borderColors = levels.map(l => l.side === "bid" ? "#3ddc97" : "#ff5c6c");
@@ -2712,7 +3032,7 @@ function renderOrderBookChart(bids, asks, denom) {
           callbacks: {
             label: (ctx) => {
               const lvl = levels[ctx.dataIndex];
-              return `${lvl.side === "bid" ? "Bid" : "Ask"}: ${formatCompact(lvl.qty)} @ ${denom}${formatNumber(lvl.price)}`;
+              return `${lvl.side === "bid" ? "Bid" : "Ask"}: ${formatCompact(lvl.qty)} @ ${denom}${formatNumber(lvl.price, currentModalCoinId)}`;
             }
           }
         }
@@ -2883,9 +3203,9 @@ async function runPatternAnalysis() {
     const sym = currencySymbol();
     const lineDescs = userLines.map(l => {
       const fmt = ts => new Date(ts).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
-      if (l.type === "horizontal") return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y)}`;
-      if (l.type === "channel") return `• Κανάλι τάσης: (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)}), offset ${sym}${formatNumber(Math.abs(l.offset || 0))}`;
-      return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y)})`;
+      if (l.type === "horizontal") return `• Οριζόντια γραμμή στο επίπεδο τιμής ${sym}${formatNumber(l.p1.y, currentModalCoinId)}`;
+      if (l.type === "channel") return `• Κανάλι τάσης: (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y, currentModalCoinId)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y, currentModalCoinId)}), offset ${sym}${formatNumber(Math.abs(l.offset || 0), currentModalCoinId)}`;
+      return `• Γραμμή τάσης από (${fmt(l.p1.x)}, ${sym}${formatNumber(l.p1.y, currentModalCoinId)}) έως (${fmt(l.p2.x)}, ${sym}${formatNumber(l.p2.y, currentModalCoinId)})`;
     }).join("\n");
     userLinesSection = `\nΠαρατηρήσεις χρήστη:\n${lineDescs}\n`;
   }
@@ -3133,7 +3453,7 @@ function renderAnalysisResults(data, analysisCandles, tsByCandle, ohlcSummaryFor
       if (!f) return "";
       const icon = dirIcon[f.direction] || "→";
       const col = dirColor[f.direction] || "var(--text)";
-      const price = f.price ? `<strong style="color:${col}">${icon} ${sym}${formatNumber(f.price)}</strong>` : "";
+      const price = f.price ? `<strong style="color:${col}">${icon} ${sym}${formatNumber(f.price, currentModalCoinId)}</strong>` : "";
       return `<div class="analysis-finding">
         <div class="finding-dot" style="background:${col}"></div>
         <div><span style="color:var(--text-dim);font-size:0.8rem;">${label}</span>
@@ -3216,12 +3536,15 @@ function getSavedAnalyses() {
 
 function saveAnalysis(entry) {
   const list = getSavedAnalyses();
+  const sessions = list.filter(e => e.isSession);
   // Avoid duplicates within the same minute for the same coin+interval
   const key = entry.coinName + "|" + entry.interval + "|" + entry.date.slice(0, 16);
-  const filtered = list.filter(e => (e.coinName + "|" + e.interval + "|" + e.date.slice(0, 16)) !== key);
-  filtered.unshift({ ...entry, id: Date.now() });
-  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  let nonSessions = list.filter(e => !e.isSession &&
+    (e.coinName + "|" + e.interval + "|" + (e.date||"").slice(0, 16)) !== key);
+  nonSessions.unshift({ ...entry, id: Date.now() });
+  if (nonSessions.length > MAX_SAVED_ANALYSES) nonSessions.length = MAX_SAVED_ANALYSES;
+  // Sessions kept separately — they never evict analyses
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions, ...sessions]));
   renderSavedAnalysesList();
   markDirtyForSync();
 }
@@ -3270,9 +3593,11 @@ document.getElementById("manualSaveBtn").addEventListener("click", () => {
   };
 
   const list = getSavedAnalyses();
-  list.unshift(entry);
-  if (list.length > MAX_SAVED_ANALYSES) list.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(list));
+  const sessions2 = list.filter(e => e.isSession);
+  let nonSessions2 = list.filter(e => !e.isSession);
+  nonSessions2.unshift(entry);
+  if (nonSessions2.length > MAX_SAVED_ANALYSES) nonSessions2.length = MAX_SAVED_ANALYSES;
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions2, ...sessions2]));
   renderSavedAnalysesList();
   markDirtyForSync();
   document.getElementById("analysisRangeHint").textContent = `✓ Αποθηκεύτηκε ως «${entry.name}»`;
@@ -3328,59 +3653,116 @@ function renderSavedAnalysesList() {
 }
 
 function loadSavedAnalysis(entry) {
-  // Make sure the modal is open for the right coin if possible
   const panel = $analysisPanel();
   const apikeyRow = $apikeyRow();
   const rangeRow = document.getElementById("analysisRangeRow");
 
-  // Show analysis panel
-  panel.classList.add("open");
-  panel.classList.remove("minimized");
-  document.getElementById("analysisPanelBar").style.display = "flex";
-  setMinimizeButtonState(false);
-  apikeyRow.style.display = "none";
-  rangeRow.style.display = "flex";
-  document.getElementById("analyzeBtn").classList.add("active");
+  // Helper that applies lines + report after the chart is ready
+  function applyEntry() {
+    panel.classList.add("open");
+    panel.classList.remove("minimized");
+    document.getElementById("analysisPanelBar").style.display = "flex";
+    setMinimizeButtonState(false);
+    apikeyRow.style.display = "none";
+    rangeRow.style.display = "flex";
+    document.getElementById("analyzeBtn").classList.add("active");
 
-  // Restore all lines (user-drawn + AI) from savedLines if available
-  manualLines = [];
-  hiddenPatternTypes.clear();
+    // Restore lines
+    manualLines = [];
+    hiddenPatternTypes.clear();
 
-  if (entry.savedLines && entry.savedLines.length > 0) {
-    // Restore directly — savedLines already has full p1/p2/type/color data
-    manualLines = entry.savedLines.map(l => ({ ...l, id: ++lineIdCounter }));
-    if (bigChart) bigChart.update();
-  } else if (entry.findings && entry.candles && entry.tsByCandle) {
-    // Fallback: reconstruct AI lines via shared helper
-    applyFindingsToChart(entry.findings, entry.tsByCandle, entry.candles);
-    if (bigChart) bigChart.update();
+    if (entry.savedLines && entry.savedLines.length > 0) {
+      manualLines = entry.savedLines.map(l => ({ ...l, id: ++lineIdCounter }));
+      if (bigChart) bigChart.update();
+    } else if (entry.findings && entry.candles && entry.tsByCandle) {
+      applyFindingsToChart(entry.findings, entry.tsByCandle, entry.candles);
+      if (bigChart) bigChart.update();
+    }
+
+    if (entry.candles?.length) _lastCandles = entry.candles;
+
+    panel.innerHTML = entry.reportHtml ||
+      (entry.isSession
+        ? `<div style="color:var(--text-dim);padding:0.5rem 0;">Session — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} γραμμές επαναφορτώθηκαν.</div>`
+        : entry.isNamed
+        ? `<div style="color:var(--text-dim);padding:0.5rem 0;">«${entry.name}» — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} γραμμές επαναφορτώθηκαν.</div>`
+        : "<div style='color:var(--text-dim)'>Αποθηκευμένη ανάλυση.</div>");
+
+    _chatOhlcSummary = entry.ohlcSummaryForChat || "";
+    _chatCoinName = entry.coinName || "";
+    _chatInterval = entry.interval || "";
+    _chatHistory = [];
+
+    const dateStr = new Date(entry.date).toLocaleString("el-GR",
+      { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+    $analysisHint().textContent =
+      `↩ Φορτώθηκε: ${entry.coinName} · ${entry.interval} · ${dateStr}`;
+
+    refreshUserLineSelectionUI();
+    renderSavedAnalysesList();
   }
 
-  // Restore report HTML (empty for sessions/named saves without an AI report)
-  panel.innerHTML = entry.reportHtml ||
-    (entry.isSession
-      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">Session αποθηκευμένο — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
-      : entry.isNamed
-      ? `<div style="color:var(--text-dim); padding:0.5rem 0;">«${entry.name}» — ${entry.savedLines?.filter(l=>!l.aiGenerated).length || 0} χειροκίνητες γραμμές επαναφορτώθηκαν.</div>`
-      : "<div style='color:var(--text-dim)'>Αποθηκευμένη ανάλυση.</div>");
-
-  // Restore candles to _lastCandles so chart tools (regression, etc.) work
-  if ((entry.isSession || entry.isNamed) && entry.candles?.length) {
-    _lastCandles = entry.candles;
+  // If the modal is already open for the correct coin — apply immediately
+  if (bigChart && currentModalCoinId === entry.coinId) {
+    applyEntry();
+    return;
   }
 
-  // Restore chat context
-  _chatOhlcSummary = entry.ohlcSummaryForChat || "";
-  _chatCoinName = entry.coinName || "";
-  _chatInterval = entry.interval || "";
-  _chatHistory = [];
+  // Otherwise open (or re-open) the modal for the right coin, wait for
+  // candles to load, then apply lines + report
+  const coin = latestMarketData[entry.coinId];
+  const name = entry.coinName || entry.coinId;
+  const symbol = coin?.symbol || entry.coinId;
 
-  const dateStr = new Date(entry.date).toLocaleString("el-GR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit"
-  });
-  $analysisHint().textContent =
-    `↩ Φορτώθηκε αποθηκευμένη ανάλυση (${entry.coinName} · ${entry.interval} · ${dateStr})`;
+  // Set the saved interval/limit so loadModalChart uses the right timeframe
+  currentInterval = entry.interval?.includes("λ") || entry.interval?.includes("1λ") ? "1m"
+    : entry.interval?.includes("15λ") ? "15m"
+    : entry.interval?.includes("1ω") ? "1h"
+    : entry.interval?.includes("ημ") ? "1d"
+    : "1h";
+
+  // Map label back to interval/limit
+  const tfMap = {
+    "1λ (2ω)": ["1m",120], "⏱ 1λ (2ω)": ["1m",120],
+    "5λ": ["5m",288], "⏱ 5λ": ["5m",288],
+    "15λ": ["15m",288], "⏱ 15λ": ["15m",288],
+    "1ω": ["1h",168], "⏱ 1ω": ["1h",168],
+    "4ω": ["4h",360], "⏱ 4ω": ["4h",360],
+    "1ημ": ["1d",365], "⏱ 1ημ": ["1d",365],
+    "1εβδ": ["1w",104], "⏱ 1εβδ": ["1w",104]
+  };
+  const tf = tfMap[entry.interval] || ["1h", 168];
+  currentInterval = tf[0];
+  currentLimit = tf[1];
+
+  // Update select to reflect chosen timeframe
+  const sel = document.getElementById("timeframeSelect");
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      const [iv, lim] = sel.options[i].value.split("|");
+      if (iv === currentInterval && parseInt(lim) === currentLimit) {
+        sel.selectedIndex = i;
+        break;
+      }
+    }
+  }
+
+  openChartModal(entry.coinId, name, symbol);
+
+  // Monkey-patch loadModalChart completion: wait for chart to be ready
+  const origRender = _renderBigChartImpl;
+  const _once = function(candles) {
+    origRender(candles);
+    renderBigChart = _renderBigChartWrapper; // restore
+    // Apply lines after chart renders (next tick)
+    setTimeout(applyEntry, 50);
+  };
+  // Override just this one render cycle
+  let _renderBigChartWrapper = renderBigChart;
+  renderBigChart = function(candles) {
+    if (candles && candles.length) _lastCandles = candles;
+    _once(_lastCandles);
+  };
 }
 
 document.getElementById("clearSavedBtn")?.addEventListener("click", () => {
@@ -3513,7 +3895,7 @@ function setActiveTool(tool) {
     modalHint.textContent = "Κλικ=πράσινο flag · Shift+κλικ=κόκκινο · Alt+κλικ=με ετικέτα.";
     bigChartCanvas.style.cursor = cursorWhite;
   } else {
-    modalHint.textContent = "Scroll για zoom · σύρε για pan";
+    modalHint.textContent = "Scroll=zoom · Ctrl+drag ή ροδέλα=pan · άξονας Y=κλίμακα";
     bigChartCanvas.style.cursor = "default";
   }
 }
@@ -3574,7 +3956,7 @@ function refreshUserLineSelectionUI() {
 
     let desc = typeLabel[line.type] || line.type;
     if (line.type === "horizontal") {
-      desc += ` ${sym}${formatNumber(line.p1.y)}`;
+      desc += ` ${sym}${formatNumber(line.p1.y, currentModalCoinId)}`;
     } else if (line.type === "trend" || line.type === "channel") {
       const d1 = new Date(line.p1.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
       const d2 = new Date(line.p2.x).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit" });
@@ -3682,7 +4064,7 @@ const manualLinesPlugin = {
     }
 
     function drawPriceLabel(ypx, price, color) {
-      const text = currencySymbol() + formatNumber(price);
+      const text = currencySymbol() + formatNumber(price, currentModalCoinId);
       ctx.save();
       ctx.font = "12px sans-serif";
       const padding = 4;
@@ -3906,7 +4288,7 @@ const currentPricePlugin = {
     ctx.restore();
 
     // Price label badge on the left
-    const text = currencySymbol() + formatNumber(price);
+    const text = currencySymbol() + formatNumber(price, currentModalCoinId);
     ctx.save();
     ctx.font = "bold 12px sans-serif";
     const padding = 5;
@@ -3942,15 +4324,18 @@ if (typeof Chart !== "undefined") {
    whichever candle the user is hovering over (via the Chart.js external
    tooltip handler below) — keeps this information off the canvas
    entirely so it never overlaps candles/lines. */
-function updateOhlcTicker(o, h, l, c) {
+function updateOhlcTicker(o, h, l, c, v) {
   const el = document.getElementById("modalOhlcTicker");
   if (!el) return;
   const s = currencySymbol();
+  const volPart = (v !== undefined && v !== null && v > 0)
+    ? ` Vol:<b style="color:#4f8cff">${formatCompact(v)}</b>` : "";
   el.innerHTML =
-    `O:<b style="color:var(--text)">${s}${formatNumber(o)}</b> ` +
-    `H:<b style="color:var(--green)">${s}${formatNumber(h)}</b> ` +
-    `L:<b style="color:var(--red)">${s}${formatNumber(l)}</b> ` +
-    `C:<b style="color:var(--text)">${s}${formatNumber(c)}</b>`;
+    `O:<b style="color:var(--text)">${s}${formatNumber(o, currentModalCoinId)}</b> ` +
+    `H:<b style="color:var(--green)">${s}${formatNumber(h, currentModalCoinId)}</b> ` +
+    `L:<b style="color:var(--red)">${s}${formatNumber(l, currentModalCoinId)}</b> ` +
+    `C:<b style="color:var(--text)">${s}${formatNumber(c, currentModalCoinId)}</b>` +
+    volPart;
 }
 
 function dataCoordsFromEvent(evt) {
@@ -3975,7 +4360,7 @@ bigChartCanvas.addEventListener("click", (evt) => {
     const { x, y } = dataCoordsFromEvent(evt);
     const color = evt.shiftKey ? "#ef4444" : "#22c55e"; // Shift=red, normal=green
     const label = evt.altKey ? (window.prompt("Ετικέτα flag:", "") || "") : "";
-    const priceLabel = currencySymbol() + formatNumber(y);
+    const priceLabel = currencySymbol() + formatNumber(y, currentModalCoinId);
     chartFlags.push({ id: Date.now(), x, y, color, label, priceLabel });
     bigChart.update();
     return;
@@ -4055,6 +4440,25 @@ bigChartCanvas.addEventListener("click", (evt) => {
     } else {
       modalHint.textContent = "Δεν βρέθηκε γραμμή κοντά στο σημείο. Δοκίμασε πιο κοντά.";
     }
+
+    // Also check flags — click near stem base or triangle
+    const flagIdx = chartFlags.findIndex(flag => {
+      const fxPx = bigChart.scales.x.getPixelForValue(flag.x);
+      const fyPx = bigChart.scales.y.getPixelForValue(flag.y);
+      // Hit area: stem (vertical line) + triangle area (52×22px above stem top)
+      const stemTop = fyPx - 50;
+      // Near stem
+      if (Math.abs(px - fxPx) <= DELETE_HIT_PX && py >= stemTop && py <= fyPx) return true;
+      // Inside triangle bounding box
+      if (px >= fxPx && px <= fxPx + 52 && py >= stemTop && py <= stemTop + 22) return true;
+      return false;
+    });
+    if (flagIdx !== -1) {
+      chartFlags.splice(flagIdx, 1);
+      bigChart.update();
+      modalHint.textContent = "Flag διαγράφηκε.";
+    }
+
     return;
   }
 
@@ -4112,7 +4516,7 @@ bigChartCanvas.addEventListener("click", (evt) => {
       p2: { x: xMax, y }
     });
     setActiveTool(null);
-    modalHint.textContent = `Η οριζόντια γραμμή προστέθηκε στο ${currencySymbol()}${formatNumber(y)}. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.`;
+    modalHint.textContent = `Η οριζόντια γραμμή προστέθηκε στο ${currencySymbol()}${formatNumber(y, currentModalCoinId)}. Χρησιμοποίησε «Μετακίνηση/επέκταση» για να την προσαρμόσεις.`;
     bigChart.update();
     refreshUserLineSelectionUI();
   }
@@ -4120,6 +4524,35 @@ bigChartCanvas.addEventListener("click", (evt) => {
 
 bigChartCanvas.addEventListener("mousedown", (evt) => {
   if (!bigChart) return;
+
+  // Block the zoom plugin's pan from starting whenever a drawing tool
+  // is active — it registers its own mousedown listener on the same
+  // canvas, so we must stop propagation before it fires.
+  if (activeTool !== null) {
+    evt.stopImmediatePropagation();
+  }
+
+  // Custom pan: Ctrl+left-click OR middle mouse button (button 1).
+  // Works regardless of which drawing tool is active.
+  const isCtrlDrag = evt.button === 0 && evt.ctrlKey;
+  const isMiddle   = evt.button === 1;
+  if (isCtrlDrag || isMiddle) {
+    evt.preventDefault(); // prevents text selection (Ctrl) and autoscroll (middle)
+    evt.stopImmediatePropagation();
+    const pos = Chart.helpers.getRelativePosition(evt, bigChart);
+    const xScale = bigChart.scales.x;
+    const yScale = bigChart.scales.y;
+    panState = {
+      startX: pos.x,
+      startY: pos.y,
+      xMin: xScale.min ?? xScale.min,
+      xMax: xScale.max ?? xScale.max,
+      yMin: yScale.min,
+      yMax: yScale.max
+    };
+    bigChartCanvas.style.cursor = "grabbing";
+    return;
+  }
 
   // Vertical scale drag: mousedown over the y-axis label area (left of
   // chartArea) rescales the price axis, independent of drawing tools.
@@ -4191,6 +4624,11 @@ bigChartCanvas.addEventListener("mousedown", (evt) => {
 bigChartCanvas.addEventListener("mousemove", (evt) => {
   if (!bigChart) return;
 
+  // During a line drag, stop zoom plugin from also processing the move
+  if (dragState !== null) {
+    evt.stopImmediatePropagation();
+  }
+
   // Vertical scale drag: rescale the price axis around its center
   if (yAxisDragState) {
     const pos = Chart.helpers.getRelativePosition(evt, bigChart);
@@ -4236,7 +4674,7 @@ bigChartCanvas.addEventListener("mousemove", (evt) => {
         // Keep both endpoints at the same y; preserve full-width x span
         line.p1.y = y;
         line.p2.y = y;
-        modalHint.textContent = `Οριζόντια γραμμή: ${currencySymbol()}${formatNumber(y)}`;
+        modalHint.textContent = `Οριζόντια γραμμή: ${currencySymbol()}${formatNumber(y, currentModalCoinId)}`;
       } else if (line.type === "channel" && (dragState.endpoint === "p1b" || dragState.endpoint === "p2b")) {
         // Dragging the parallel line — update the channel offset
         const ep = dragState.endpoint === "p1b" ? "p1" : "p2";
@@ -4268,7 +4706,51 @@ bigChartCanvas.addEventListener("mousemove", (evt) => {
   }
 });
 
+// Window-level pan handler — tracks mouse even outside the canvas during drag
+window.addEventListener("mousemove", (evt) => {
+  if (!panState || !bigChart) return;
+  evt.preventDefault();
+  const rect = bigChartCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  // Convert client coords to chart-relative pixel coords
+  const rawX = (evt.clientX - rect.left);
+  const rawY = (evt.clientY - rect.top);
+  // Scale to canvas CSS pixels (Chart.helpers.getRelativePosition equivalent)
+  const pos = Chart.helpers.getRelativePosition(
+    { clientX: evt.clientX, clientY: evt.clientY, target: bigChartCanvas },
+    bigChart
+  );
+
+  const { chartArea } = bigChart;
+  const pxW = chartArea.right - chartArea.left;
+  const pxH = chartArea.bottom - chartArea.top;
+  const xRange = panState.xMax - panState.xMin;
+
+  const dx = panState.startX - pos.x;
+  const dy = panState.startY - pos.y;
+
+  bigChart.options.scales.x.min = panState.xMin + (dx / pxW) * xRange;
+  bigChart.options.scales.x.max = panState.xMax + (dx / pxW) * xRange;
+
+  // Vertical pan only if we have valid y bounds
+  const yRange = (panState.yMax != null && panState.yMin != null)
+    ? panState.yMax - panState.yMin : 0;
+  if (yRange > 0) {
+    bigChart.options.scales.y.min = panState.yMin - (dy / pxH) * yRange;
+    bigChart.options.scales.y.max = panState.yMax - (dy / pxH) * yRange;
+  }
+
+  bigChart.update("none");
+}, { passive: false });
+
 window.addEventListener("mouseup", (evt) => {
+  // End custom pan
+  if (panState) {
+    panState = null;
+    bigChartCanvas.style.cursor = "default";
+    return;
+  }
+
   // Commit y-axis rescale drag
   if (yAxisDragState) {
     yAxisDragState = null;
@@ -4338,10 +4820,16 @@ function openChartModal(coinId, name, symbol) {
     : "CoinGecko";
   modalTitle.textContent = `${name} (${symbol.toUpperCase()}) — Candlestick (${sourceLabel})`;
 
+  populateCoinSwitch(coinId);
+
+  const decSel = document.getElementById("modalDecimalsSelect");
+  if (decSel) decSel.value = String(getDecimalsFor(coinId));
+
   resetDrawings();
-  // Keep whatever timeframe was last used this session (defaults to 1ω on
-  // the very first chart opened), instead of always resetting to 2ω(1λ).
-  syncTimeframeUI();
+  const sel = document.getElementById("timeframeSelect");
+  if (sel) sel.selectedIndex = 0;
+  currentInterval = "1m";
+  currentLimit = 120;
   chartModal.classList.add("open");
   loadModalChart();
 }
@@ -4373,10 +4861,80 @@ function closeChartModal() {
   document.getElementById("analyzeBtn").classList.remove("active");
 }
 
+/* ---------- Coin switcher: quick jump to another watchlist coin ---------- */
+function populateCoinSwitch(activeCoinId) {
+  const sel = document.getElementById("modalCoinSwitch");
+  if (!sel) return;
+  sel.innerHTML = "";
+  watchlist.forEach(id => {
+    const coin = latestMarketData[id];
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = coin ? `${coin.name} (${coin.symbol.toUpperCase()})` : id;
+    if (id === activeCoinId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById("modalCoinSwitch").addEventListener("change", (e) => {
+  const newId = e.target.value;
+  if (!newId || newId === currentModalCoinId) return;
+  const coin = latestMarketData[newId];
+  const name = coin?.name || newId;
+  const symbol = coin?.symbol || newId;
+  openChartModal(newId, name, symbol);
+});
+
+document.getElementById("modalHomeBtn").addEventListener("click", () => {
+  closeChartModal();
+});
+
 /* Fetch candle data from the best available source:
    - Kraken (EUR pairs) when currency=EUR and a Kraken EUR pair exists
    - Binance (USDT pairs) otherwise, if available
    - CoinGecko as a last-resort fallback */
+/* Standalone candle fetcher — independent of the main modal's global state
+   (currentModalCoinId/currentInterval/etc). Used by the split-view comparison
+   panel so it doesn't interfere with the primary chart. */
+async function fetchCandlesForCoin(coinId, interval, limit) {
+  const intervalMs = {
+    "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3,
+    "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3,
+    "1d": 86400e3, "1w": 7*86400e3
+  }[interval] || 3600e3;
+
+  const krakenSymbol = KRAKEN_EUR_MAP[coinId];
+  const binanceSymbol = BINANCE_SYMBOL_MAP[coinId];
+
+  if (currency === "eur" && krakenSymbol) {
+    const krakenInterval = KRAKEN_INTERVAL_MAP[interval] || 60;
+    const histCount = Math.min(limit * 3, 720);
+    const sinceSec = Math.floor((Date.now() - histCount * intervalMs) / 1000);
+    const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}&since=${sinceSec}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.error && data.error.length > 0) throw new Error(data.error.join(", "));
+    const resultKey = Object.keys(data.result).find(k => k !== "last");
+    const rows = data.result[resultKey] || [];
+    return rows.map(r => [r[0]*1000, parseFloat(r[1]), parseFloat(r[2]), parseFloat(r[3]), parseFloat(r[4]), parseFloat(r[6])]);
+  } else if (binanceSymbol) {
+    const histLimit = Math.min(limit * 3, 1000);
+    const url = `${BINANCE_BASE}/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${histLimit}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return data.map(k => [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4]), parseFloat(k[5])]);
+  } else {
+    // CoinGecko fallback — daily granularity only, good enough for comparison
+    const url = `${COINGECKO_BASE}/coins/${coinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return buildCandlesFromPrices(data.prices, 24*3600e3, data.total_volumes);
+  }
+}
+
 async function loadModalChart() {
   if (!currentModalCoinId) return;
   bigChartCanvas.style.opacity = "0.4";
@@ -4390,20 +4948,20 @@ async function loadModalChart() {
       // `since` parameter so we always get the correct time window regardless
       // of how many candles that produces.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3, "1w": 7*86400e3
       }[currentInterval] || 3600e3;
       // Kraken max 720 candles/request. For windows > 720 candles, use a
       // coarser but supported interval: 4h (240min) covers up to 120 days,
       // 1d covers up to 720 days. Pick the finest interval that fits in 720.
       let effectiveInterval = currentInterval;
-      const windowMs = intervalMs * currentLimit;
-      if (windowMs > 720 * intervalMs) {
-        // Need more than 720 candles — use next coarser interval
-        if (currentInterval === "4h") effectiveInterval = "1d";
-      }
+      // Kraken returns max 720 candles per request.
+      // If we need more candles than that, use the already-mapped coarser interval.
+      // (KRAKEN_INTERVAL_MAP already maps 6h→240, 12h→1440 for unsupported intervals)
       const krakenInterval = KRAKEN_INTERVAL_MAP[effectiveInterval] || 60;
-      // `since` in Unix seconds = start of desired window
-      const sinceMs = Date.now() - (currentLimit * intervalMs);
+      // Fetch 3× the visible window as history so panning left reveals
+      // older candles (Kraken caps at 720 candles per request).
+      const histCount = Math.min(currentLimit * 3, 720);
+      const sinceMs = Date.now() - (histCount * intervalMs);
       const sinceSec = Math.floor(sinceMs / 1000);
       const url = `${KRAKEN_BASE}/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}&since=${sinceSec}`;
       const res = await fetch(url);
@@ -4417,15 +4975,11 @@ async function loadModalChart() {
       const symbol = BINANCE_SYMBOL_MAP[currentModalCoinId];
       // Binance limit max is 1000. For larger ranges, use startTime instead.
       const intervalMs = {
-        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3
+        "1m": 60e3, "5m": 5*60e3, "15m": 15*60e3, "30m": 30*60e3, "1h": 3600e3, "4h": 4*3600e3, "6h": 6*3600e3, "12h": 12*3600e3, "1d": 86400e3, "1w": 7*86400e3
       }[currentInterval] || 3600e3;
       let url;
-      if (currentLimit <= 1000) {
-        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&limit=${currentLimit}`;
-      } else {
-        const startTime = Date.now() - intervalMs * currentLimit;
-        url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&startTime=${startTime}&limit=1000`;
-      }
+      const histLimit = Math.min(currentLimit * 3, 1000);
+      url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${currentInterval}&limit=${histLimit}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
@@ -4453,45 +5007,49 @@ async function loadCoinGeckoFallback() {
   const H = 60 * 60 * 1000;
   if (currentInterval === "1m") {
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    const oneHourAgo = Date.now() - H;
-    const recent = data.prices.filter(p => p[0] >= oneHourAgo);
-    candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-12), 5 * 60 * 1000, data.total_volumes);
+    const twoHoursAgo = Date.now() - 2 * H;
+    const recent = data.prices.filter(p => p[0] >= twoHoursAgo);
+    candles = buildCandlesFromPrices(recent.length >= 4 ? recent : data.prices.slice(-24), 60 * 1000, data.total_volumes);
   } else if (currentInterval === "5m") {
-    // 24h with 5-min candles: market_chart days=1 gives ~5-min points
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=1`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     candles = buildCandlesFromPrices(data.prices, 5 * 60 * 1000, data.total_volumes);
-  } else if (currentInterval === "1h" && currentLimit <= 168) {
-    // 7-day hourly: market_chart with days=7 gives hourly points
-    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+  } else if (currentInterval === "15m") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=3`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
+    candles = buildCandlesFromPrices(data.prices, 15 * 60 * 1000, data.total_volumes);
+  } else if (currentInterval === "30m") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 30 * 60 * 1000, data.total_volumes);
   } else if (currentInterval === "1h") {
-    // 30-day hourly: market_chart with days=30 gives hourly points
-    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=30`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=7`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     candles = buildCandlesFromPrices(data.prices, H, data.total_volumes);
   } else if (currentInterval === "4h") {
-    // 6-month, 4h candles: build from daily market_chart (free API limit)
-    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=180&interval=daily`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=60`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     candles = buildCandlesFromPrices(data.prices, 4 * H, data.total_volumes);
-  } else {
-    // 1-year daily
+  } else if (currentInterval === "1d") {
     const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 24 * H, data.total_volumes);
+  } else if (currentInterval === "1w") {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=730&interval=daily`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    candles = buildCandlesFromPrices(data.prices, 7 * 24 * H, data.total_volumes);
+  } else {
+    const url = `${COINGECKO_BASE}/coins/${currentModalCoinId}/market_chart?vs_currency=${currency}&days=365&interval=daily`;
+    const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     candles = buildCandlesFromPrices(data.prices, 24 * H, data.total_volumes);
   }
@@ -4544,7 +5102,7 @@ function renderBigChart(candles) {
 
   const datasets = [{
     label: "Τιμή (O/H/L/C)",
-    data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c })),
+    data: ohlcData.map(d => ({ x: d.x, y: d.c, o: d.o, h: d.h, l: d.l, c: d.c, v: d.v })),
     candleData: true,
     upColor: "#3ddc97",
     downColor: "#ff5c6c",
@@ -4609,11 +5167,9 @@ function renderBigChart(candles) {
   }
 
   const timeUnit =
-    (currentInterval === "1m" || currentInterval === "5m" || currentInterval === "15m") ? "minute"
-    : (currentInterval === "30m") ? "hour"
-    : (currentInterval === "1h" && currentLimit <= 168) ? "hour"
-    : (currentInterval === "6h" || currentInterval === "12h") ? "day"
-    : "day";
+    ["1m","5m","15m"].includes(currentInterval) ? "minute"
+    : ["30m","1h","4h"].includes(currentInterval) ? "hour"
+    : "day"; // 1d, 1w → day labels
 
   // Display formats: date + time only, no day name
   const timeDisplayFormats = {
@@ -4682,20 +5238,19 @@ function renderBigChart(candles) {
             if (!tt || tt.opacity === 0 || !tt.dataPoints || tt.dataPoints.length === 0) {
               // Not hovering — show the latest candle by default
               const last = candleDs.data[candleDs.data.length - 1];
-              updateOhlcTicker(last.o, last.h, last.l, last.c);
+              updateOhlcTicker(last.o, last.h, last.l, last.c, last.v);
               return;
             }
             const candlePoint = tt.dataPoints.find(dp => dp.dataset.candleData);
             if (candlePoint) {
               const d = candlePoint.raw;
-              updateOhlcTicker(d.o, d.h, d.l, d.c);
+              updateOhlcTicker(d.o, d.h, d.l, d.c, d.v);
             }
           }
         },
         zoom: {
           pan: {
-            enabled: true,
-            mode: "xy",  // pan both axes
+            enabled: false, // disabled — custom pan via Ctrl+drag or middle mouse button
           },
           zoom: {
             wheel: { enabled: true, speed: 0.08 },
@@ -4706,6 +5261,17 @@ function renderBigChart(candles) {
       }
     }
   });
+
+  // Initial view: show only the most recent `currentLimit` candles;
+  // the extra fetched history stays available by panning left.
+  if (candles.length > currentLimit) {
+    const firstVisible = candles[candles.length - currentLimit][0];
+    const lastTs = candles[candles.length - 1][0];
+    const pad = (lastTs - firstVisible) * 0.02;
+    bigChart.options.scales.x.min = firstVisible;
+    bigChart.options.scales.x.max = lastTs + pad;
+    bigChart.update("none");
+  }
 }
 
 // cache last candle data so the chart can be redrawn (e.g. clearing lines)
@@ -4746,10 +5312,13 @@ function autoSaveSession() {
   };
 
   const list = getSavedAnalyses();
-  const filtered = list.filter(e => e.id !== sessionKey);
-  filtered.unshift(entry);
-  if (filtered.length > MAX_SAVED_ANALYSES) filtered.length = MAX_SAVED_ANALYSES;
-  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify(filtered));
+  const nonSessions = list.filter(e => !e.isSession);
+  let sessions = list.filter(e => e.isSession && e.id !== sessionKey);
+  sessions.unshift(entry);
+  const MAX_SESSIONS = 3;
+  if (sessions.length > MAX_SESSIONS) sessions.length = MAX_SESSIONS;
+  // Analyses first, sessions after — sessions never push analyses out
+  localStorage.setItem(SAVED_ANALYSES_KEY, JSON.stringify([...nonSessions, ...sessions]));
   renderSavedAnalysesList();
 }
 
@@ -4789,7 +5358,7 @@ function computeRegression() {
   regStatsEl.innerHTML = `
     <div>Τάση: <b>${trendWord}</b></div>
     <div>Μεταβολή στο διάστημα: <b>${totalChangePct >= 0 ? '+' : ''}${totalChangePct.toFixed(2)}%</b></div>
-    <div>Κλίση / ημέρα: <b>${currencySymbol()}${formatNumber(slopePerDay)}</b></div>
+    <div>Κλίση / ημέρα: <b>${currencySymbol()}${formatNumber(slopePerDay, currentModalCoinId)}</b></div>
   `;
 
   if (bigChart) bigChart.update();
@@ -4803,7 +5372,7 @@ function computeRegression() {
   document.getElementById("txDateInput").value = today;
 })();
 loadData();
-setInterval(loadData, 15000);
+setInterval(loadData, 30000); // 30s — avoids CoinGecko rate limits (30 req/min)
 
 // Silent auto-sync on load, if configured
 (function initAutoSync() {

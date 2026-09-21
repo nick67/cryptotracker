@@ -2365,8 +2365,8 @@ const $userLinesHint    = () => document.getElementById("userLinesHint");
 
 let bigChart = null;
 let currentModalCoinId = null;
-let currentInterval = "5m";
-let currentLimit = 288;
+let currentInterval = "1h";
+let currentLimit = 168;
 let currentModalSymbol = "";
 let dataSource = "binance"; // "binance" | "kraken" | "coingecko"
 
@@ -4826,10 +4826,15 @@ function openChartModal(coinId, name, symbol) {
   if (decSel) decSel.value = String(getDecimalsFor(coinId));
 
   resetDrawings();
+  // Keep whatever timeframe was last used this session (defaults to 1ω on
+  // the very first chart opened this session), instead of always resetting
+  // to 2ω(1λ).
   const sel = document.getElementById("timeframeSelect");
-  if (sel) sel.selectedIndex = 0;
-  currentInterval = "1m";
-  currentLimit = 120;
+  if (sel) {
+    const val = `${currentInterval}|${currentLimit}`;
+    const idx = Array.from(sel.options).findIndex(o => o.value === val);
+    sel.selectedIndex = idx !== -1 ? idx : 0;
+  }
   chartModal.classList.add("open");
   loadModalChart();
 }

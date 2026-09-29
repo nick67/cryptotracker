@@ -2286,19 +2286,21 @@ let isLoading = false;
 
 async function fetchMarketDataFor(ids, retries = 2) {
   if (ids.length === 0) return [];
+  const showCachedWhileWaiting = () => {
+    const cached = watchlist.map(id => latestMarketData[id]).filter(Boolean);
+    if (cached.length > 0 && typeof renderCards === 'function') {
+      renderCards(cached); // keep UI populated during wait
+    }
+  };
+
   try {
     const url = `${COINGECKO_BASE}/coins/markets?vs_currency=${currency}&ids=${ids.join(",")}&order=market_cap_desc&sparkline=true&price_change_percentage=24h`;
     const res = await fetch(url);
 
     if (res.status === 429) {
       // Rate limited — show cached data immediately, then retry
-      if (attempt === 1) {
-        const cached = watchlist.map(id => latestMarketData[id]).filter(Boolean);
-        if (cached.length > 0 && typeof renderCards === 'function') {
-          renderCards(cached); // keep UI populated during wait
-        }
-        statusEl.textContent = "Rate limit CoinGecko — επαναπροσπάθεια σε 8 δλ...";
-      }
+      showCachedWhileWaiting();
+      statusEl.textContent = "Rate limit CoinGecko — επαναπροσπάθεια σε 8 δλ...";
       if (retries > 0) {
         await new Promise(r => setTimeout(r, 8000));
         return fetchMarketDataFor(ids, retries - 1);
@@ -2311,7 +2313,21 @@ async function fetchMarketDataFor(ids, retries = 2) {
     data.forEach(c => { latestMarketData[c.id] = c; });
     return data;
   } catch (err) {
+    // A network-level failure (offline, DNS hiccup, CoinGecko edge block, ad
+    // blocker, etc.) surfaces here as "Failed to fetch" rather than a proper
+    // HTTP status. Retry a couple of times with a short backoff before
+    // giving up, same as the 429 path above.
+    const isNetworkError = err instanceof TypeError;
+    if (isNetworkError && retries > 0) {
+      showCachedWhileWaiting();
+      statusEl.textContent = "Πρόβλημα σύνδεσης — επαναπροσπάθεια σε 5 δλ...";
+      await new Promise(r => setTimeout(r, 5000));
+      return fetchMarketDataFor(ids, retries - 1);
+    }
     console.error("fetchMarketDataFor error:", err);
+    if (isNetworkError) {
+      throw new Error("Πρόβλημα σύνδεσης με το CoinGecko (δεν ήταν δυνατή η επικοινωνία).");
+    }
     throw err; // propagate so loadData can show the message
   }
 }
@@ -2334,7 +2350,9 @@ async function loadData() {
     renderPortfolio();
 
     statusEl.textContent = "Τελ. ενημέρωση: " + new Date().toLocaleTimeString();
+    consecutiveLoadFailures = 0;
   } catch (err) {
+    consecutiveLoadFailures++;
     statusEl.textContent = `Σφάλμα: ${err.message}`;
     console.error(err);
     // Still render cards with whatever data we already have cached
@@ -2344,6 +2362,39 @@ async function loadData() {
     isLoading = false;
   }
 }
+
+// Circuit breaker: after several fully-failed refreshes in a row (e.g. the
+// app was left open for a long time and CoinGecko is temporarily blocking
+// this IP), stop hammering their API every 30s — that only prolongs any
+// rate-limit block. Instead back off to a slower "recovery" cadence and
+// switch back to normal once a refresh succeeds again.
+let consecutiveLoadFailures = 0;
+const NORMAL_REFRESH_MS = 30000;
+const BACKOFF_REFRESH_MS = 5 * 60 * 1000; // 5 min once we suspect a sustained block
+const BACKOFF_THRESHOLD = 4; // ~2 min of straight failures before backing off
+
+function scheduledLoadData() {
+  // Skip refreshes while the tab is in the background — no point burning
+  // API calls (and rate-limit budget) on a page nobody is looking at, which
+  // is exactly how "left it open on auto-update and forgot" leads to a block.
+  if (document.hidden) return;
+  loadData();
+}
+
+setInterval(scheduledLoadData, NORMAL_REFRESH_MS);
+
+// If we're stuck failing, drop to the slower cadence until it recovers.
+setInterval(() => {
+  if (consecutiveLoadFailures >= BACKOFF_THRESHOLD && !document.hidden) {
+    loadData();
+  }
+}, BACKOFF_REFRESH_MS);
+
+// When the tab becomes visible again after being backgrounded, refresh
+// immediately instead of waiting for the next tick.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadData();
+});
 
 /* =====================================================
    CHART MODAL: candlesticks + trendlines + regression
@@ -5377,7 +5428,6 @@ function computeRegression() {
   document.getElementById("txDateInput").value = today;
 })();
 loadData();
-setInterval(loadData, 30000); // 30s — avoids CoinGecko rate limits (30 req/min)
 
 // Silent auto-sync on load, if configured
 (function initAutoSync() {

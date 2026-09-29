@@ -2318,11 +2318,11 @@ async function fetchMarketDataFor(ids, retries = 2) {
     // HTTP status. Retry a couple of times with a short backoff before
     // giving up, same as the 429 path above.
     const isNetworkError = err instanceof TypeError;
-    if (isNetworkError && retries > 0) {
+    if (isNetworkError && retries > 1) {
       showCachedWhileWaiting();
-      statusEl.textContent = "Πρόβλημα σύνδεσης — επαναπροσπάθεια σε 5 δλ...";
-      await new Promise(r => setTimeout(r, 5000));
-      return fetchMarketDataFor(ids, retries - 1);
+      statusEl.textContent = "Πρόβλημα σύνδεσης — επαναπροσπάθεια σε 3 δλ...";
+      await new Promise(r => setTimeout(r, 3000));
+      return fetchMarketDataFor(ids, 0);
     }
     console.error("fetchMarketDataFor error:", err);
     if (isNetworkError) {
@@ -2330,6 +2330,71 @@ async function fetchMarketDataFor(ids, retries = 2) {
     }
     throw err; // propagate so loadData can show the message
   }
+}
+
+/* ---------- Fallback: market data straight from exchanges ----------
+   Used when CoinGecko is unreachable/blocked. Builds objects shaped like
+   CoinGecko's /coins/markets rows (price, 24h change/high/low, 7d sparkline)
+   from Kraken (EUR) or Binance (USDT). Market cap is unavailable (null). */
+async function fetchMarketDataFromExchanges(ids) {
+  const meta = {};
+  COIN_LIST.forEach(c => { meta[c.id] = c; });
+  let okCount = 0;
+
+  const one = async (id) => {
+    const m = meta[id];
+    if (!m) return;
+    const krakenPair = currency === "eur" ? KRAKEN_EUR_MAP[id] : null;
+    let price, high, low, change, spark;
+    if (krakenPair) {
+      const [tRes, oRes] = await Promise.all([
+        fetch(`${KRAKEN_BASE}/Ticker?pair=${krakenPair}`).then(r => r.json()),
+        fetch(`${KRAKEN_BASE}/OHLC?pair=${krakenPair}&interval=60`).then(r => r.json())
+      ]);
+      const tk = Object.keys(tRes.result || {})[0];
+      const ok = Object.keys(oRes.result || {}).find(k => k !== "last");
+      if (!tk || !ok) return;
+      const t = tRes.result[tk];
+      const closes = oRes.result[ok].map(c => parseFloat(c[4]));
+      price = parseFloat(t.c[0]);
+      high = parseFloat(t.h[1]);
+      low = parseFloat(t.l[1]);
+      spark = closes.slice(-168);
+      const ref = closes.length > 25 ? closes[closes.length - 25] : closes[0];
+      change = ref ? ((price - ref) / ref) * 100 : null;
+    } else if (BINANCE_SYMBOL_MAP[id]) {
+      const sym = BINANCE_SYMBOL_MAP[id];
+      const [tRes, kRes] = await Promise.all([
+        fetch(`${BINANCE_BASE}/ticker/24hr?symbol=${sym}`).then(r => r.json()),
+        fetch(`${BINANCE_BASE}/klines?symbol=${sym}&interval=1h&limit=168`).then(r => r.json())
+      ]);
+      if (!tRes || !tRes.lastPrice) return;
+      price = parseFloat(tRes.lastPrice);
+      high = parseFloat(tRes.highPrice);
+      low = parseFloat(tRes.lowPrice);
+      change = parseFloat(tRes.priceChangePercent);
+      spark = Array.isArray(kRes) ? kRes.map(k => parseFloat(k[4])) : [];
+    } else {
+      return;
+    }
+    latestMarketData[id] = {
+      id,
+      symbol: m.symbol.toLowerCase(),
+      name: m.name,
+      image: `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${m.symbol.toLowerCase()}.png`,
+      current_price: price,
+      high_24h: high,
+      low_24h: low,
+      market_cap: null,
+      price_change_percentage_24h: change,
+      sparkline_in_7d: { price: spark || [] },
+      _fallback: true
+    };
+    okCount++;
+  };
+
+  await Promise.allSettled(ids.map(one));
+  return okCount > 0;
 }
 
 async function loadData() {
@@ -2340,8 +2405,16 @@ async function loadData() {
   try {
     const portfolioIds = Array.from(new Set(transactions.map(t => t.coinId)));
     const allIds = Array.from(new Set([...watchlist, ...portfolioIds]));
+    let usedFallback = false;
     await Promise.all([
-      allIds.length > 0 ? fetchMarketDataFor(allIds) : Promise.resolve(),
+      allIds.length > 0
+        ? fetchMarketDataFor(allIds).catch(async (err) => {
+            // CoinGecko unreachable → try Kraken/Binance directly
+            const ok = await fetchMarketDataFromExchanges(allIds);
+            if (!ok) throw err;
+            usedFallback = true;
+          })
+        : Promise.resolve(),
       fetchBidAsk(watchlist)
     ]);
 
@@ -2349,7 +2422,8 @@ async function loadData() {
     renderCards(ordered);
     renderPortfolio();
 
-    statusEl.textContent = "Τελ. ενημέρωση: " + new Date().toLocaleTimeString();
+    statusEl.textContent = "Τελ. ενημέρωση: " + new Date().toLocaleTimeString() +
+      (usedFallback ? " (πηγή: Kraken/Binance — το CoinGecko δεν αποκρίνεται)" : "");
     consecutiveLoadFailures = 0;
   } catch (err) {
     consecutiveLoadFailures++;

@@ -616,7 +616,6 @@
       <button id="selectAllLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Όλες</button>
       <button id="selectNoneLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Καμία</button>
     </div>
-    <div id="candlePatternRow" style="display:none; flex-wrap:wrap; gap:0.35rem; align-items:center; margin-bottom:0.4rem; flex-shrink:0;"></div>
     <div id="patternFilterRow" style="display:none; flex-wrap:wrap; gap:0.4rem; align-items:center; margin-bottom:0.5rem; flex-shrink:0;">
       <span style="color:var(--text-dim);font-size:0.8rem;">Εμφάνιση:</span>
     </div>
@@ -2894,7 +2893,7 @@ function detectCandlePatterns(candles) {
 const PATTERN_DIR_COLOR = { bull: "#3ddc97", bear: "#ff5c6c", neutral: "#9aa1ac" };
 
 // Shared marker renderer used by the main chart and the split-view charts
-function drawPatternMarkers(chart, patterns, cursorX, lineMode) {
+function drawPatternMarkers(chart, patterns, cursorX, cursorY, lineMode) {
   const { ctx, chartArea, scales } = chart;
   const { list, candles } = patterns;
   let hover = null;
@@ -2928,7 +2927,10 @@ function drawPatternMarkers(chart, patterns, cursorX, lineMode) {
       ctx.beginPath(); ctx.moveTo(x0, my); ctx.lineTo(x, my); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    if (cursorX !== null && cursorX !== undefined && Math.abs(cursorX - x) <= 7) hover = { p, x, my, color };
+    if (cursorX !== null && cursorX !== undefined) {
+      const dx = Math.abs(cursorX - x), dy = (cursorY === null || cursorY === undefined) ? 0 : Math.abs(cursorY - my);
+      if (dx <= 6 && dy <= 45 && (!hover || dx < hover.dx)) hover = { p, x, my, color, dx };
+    }
   });
   ctx.restore();
 
@@ -2954,50 +2956,17 @@ const candlePatternPlugin = {
   id: "candlePatternPlugin",
   afterDatasetsDraw(chart) {
     if (chart !== bigChart || !currentPatterns) return;
-    drawPatternMarkers(chart, currentPatterns, crosshairPlugin._x, false);
+    drawPatternMarkers(chart, currentPatterns, crosshairPlugin._x, crosshairPlugin._y, false);
   }
 };
 const splitPatternPlugin = {
   id: "splitPatternPlugin",
   afterDatasetsDraw(chart) {
     if (!chart.$patterns) return;
-    drawPatternMarkers(chart, chart.$patterns, chart.$crosshair ? chart.$crosshair.x : null, chart.$patterns.line);
+    drawPatternMarkers(chart, chart.$patterns, chart.$crosshair ? chart.$crosshair.x : null, chart.$crosshair ? chart.$crosshair.y : null, chart.$patterns.line);
   }
 };
 if (typeof Chart !== "undefined") { Chart.register(candlePatternPlugin); Chart.register(splitPatternPlugin); }
-
-function renderCandlePatternRow() {
-  const row = document.getElementById("candlePatternRow");
-  if (!row) return;
-  if (!currentPatterns) { row.style.display = "none"; row.innerHTML = ""; return; }
-  const { list, candles } = currentPatterns;
-  row.style.display = "flex";
-  if (!list.length) {
-    row.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem;">🕯 Δεν εντοπίστηκαν σχηματισμοί σε αυτό το διάστημα.</span>`;
-    return;
-  }
-  const recent = list.slice(-8).reverse();
-  const fmt = (ts) => new Date(ts).toLocaleString("el-GR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const bull = list.filter(p => p.dir === "bull").length, bear = list.filter(p => p.dir === "bear").length;
-  row.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem;">🕯 Σχηματισμοί (${list.length}: <span style="color:#3ddc97">▲${bull}</span> <span style="color:#ff5c6c">▼${bear}</span>) · ευαισθησία: ${SENS_LABEL[ind.sens]} · τελευταίοι:</span>` +
-    recent.map(p => {
-      const col = PATTERN_DIR_COLOR[p.dir];
-      const sym = p.dir === "bull" ? "▲" : p.dir === "bear" ? "▼" : "◆";
-      return `<button class="small" data-i="${p.i}" title="Κλικ για μετακίνηση στο κερί" style="font-size:0.74rem;padding:0.15rem 0.45rem;border-color:${col};color:${col};">${sym} ${p.name.split(" (")[0]} · ${fmt(candles[p.i][0])}</button>`;
-    }).join("") +
-    `<span style="color:var(--text-dim);font-size:0.72rem;">(ενδεικτικά — όχι επενδυτική συμβουλή)</span>`;
-  row.querySelectorAll("button[data-i]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      if (!bigChart) return;
-      const t = candles[parseInt(btn.dataset.i)][0];
-      const xs = bigChart.scales.x;
-      const half = (xs.max - xs.min) / 2;
-      bigChart.options.scales.x.min = t - half;
-      bigChart.options.scales.x.max = t + half;
-      bigChart.update("none");
-    });
-  });
-}
 
 /* -- RSI / MACD sub-panels: separate canvases whose x-range is kept in sync with the main chart -- */
 let subCharts = { rsi: null, macd: null };
@@ -5638,7 +5607,6 @@ function closeChartModal() {
   document.getElementById("modalOhlcTicker").textContent = "";
   destroySubCharts();
   currentPatterns = null; currentPivotSegs = null;
-  renderCandlePatternRow();
   analysisCustomRange = null;
   analysisDragState = null;
   document.getElementById("selectionOverlay").style.display = "none";
@@ -6070,7 +6038,6 @@ function renderBigChart(candles) {
   }
 
   buildSubCharts(candles);
-  renderCandlePatternRow();
 }
 
 // cache last candle data so the chart can be redrawn (e.g. clearing lines)

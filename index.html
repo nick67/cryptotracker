@@ -145,6 +145,7 @@
   .modal-tools .hint { color: var(--text-dim); font-size: 0.78rem; }
   .modal-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .big-chart-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
+  .sub-panel { position: relative; height: 110px; border-top: 1px solid var(--border); }
 
   /* Small centered dialog (used for Cloud Sync settings, etc.) */
   .dialog-overlay {
@@ -337,6 +338,12 @@
         <option value="4h|360">4ω</option>
         <option value="1d|365">1ημ</option>
         <option value="1w|104">1εβδ</option>
+      </select>
+      <button id="splitPatternBtn" title="Εμφάνιση/απόκρυψη σχηματισμών candlesticks" style="border-color:#38bdf8; color:#38bdf8;">🕯 Σχηματισμοί</button>
+      <select id="splitSensSelect" title="Ευαισθησία αναγνώρισης σχηματισμών" style="background:var(--panel-2); color:#38bdf8; border:1px solid #38bdf8; border-radius:6px; padding:0.3rem 0.5rem; font-size:0.85rem; cursor:pointer;">
+        <option value="loose">Ευαισθησία: Χαλαρή</option>
+        <option value="normal">Ευαισθησία: Κανονική</option>
+        <option value="strict">Ευαισθησία: Αυστηρή</option>
       </select>
       <button id="splitRefreshBtn" style="border-color:#22c55e; color:#22c55e;">↻ Ανανέωση</button>
     </div>
@@ -548,6 +555,8 @@
         <option value="delete"     style="background:#1a1f2e;color:#a78bfa;">🗑 Διαγραφή γραμμής</option>
         <option value="clear"      style="background:#1a1f2e;color:#a78bfa;">✕ Καθαρισμός όλων</option>
       </select>
+      <!-- Indicators dropdown (γαλάζιο) — options are built in JS -->
+      <select id="indicatorSelect" style="background:#1a1f2e;color:#38bdf8;border:1px solid #38bdf8;border-radius:6px;padding:0.28rem 0.5rem;font-size:0.84rem;cursor:pointer;outline:none;"></select>
       <!-- Hidden original buttons (still needed for JS handlers) -->
       <span style="display:none;">
         <button id="regressionBtn"></button>
@@ -607,6 +616,7 @@
       <button id="selectAllLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Όλες</button>
       <button id="selectNoneLinesBtn" class="small" style="font-size:0.76rem; padding:0.2rem 0.5rem;">Καμία</button>
     </div>
+    <div id="candlePatternRow" style="display:none; flex-wrap:wrap; gap:0.35rem; align-items:center; margin-bottom:0.4rem; flex-shrink:0;"></div>
     <div id="patternFilterRow" style="display:none; flex-wrap:wrap; gap:0.4rem; align-items:center; margin-bottom:0.5rem; flex-shrink:0;">
       <span style="color:var(--text-dim);font-size:0.8rem;">Εμφάνιση:</span>
     </div>
@@ -618,6 +628,10 @@
         background:rgba(79,140,255,0.12); border-left:1px dashed rgba(79,140,255,0.7);
         border-right:1px dashed rgba(79,140,255,0.7); pointer-events:none;
       "></div>
+    </div>
+    <div id="subPanels" style="display:none; flex-shrink:0;">
+      <div id="rsiPanel" class="sub-panel" style="display:none;"><canvas id="rsiChart"></canvas></div>
+      <div id="macdPanel" class="sub-panel" style="display:none;"><canvas id="macdChart"></canvas></div>
     </div>
     <div class="reg-stats" id="regStats"></div>
 
@@ -748,9 +762,11 @@ const crosshairPlugin = {
       const pos = Chart.helpers.getRelativePosition(evt, chart);
       this._x = (pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right) ? pos.x : null;
       this._y = (pos.y >= chart.chartArea.top  && pos.y <= chart.chartArea.bottom) ? pos.y : null;
+      if (typeof onMainCrosshair === "function") onMainCrosshair(this._x);
     } else if (evt.type === "mouseout") {
       this._x = null;
       this._y = null;
+      if (typeof onMainCrosshair === "function") onMainCrosshair(null);
     }
     args.changed = true;
   },
@@ -2528,6 +2544,613 @@ document.getElementById("timeframeSelect").addEventListener("change", (e) => {
   loadModalChart();
 });
 
+/* ---------- Technical indicators ---------- */
+const IND_KEY = "crypto_tracker_indicators_v1";
+const IND_DEFS = [
+  { id: "sma20",  label: "SMA 20",  color: "#fbbf24" },
+  { id: "sma50",  label: "SMA 50",  color: "#60a5fa" },
+  { id: "sma200", label: "SMA 200", color: "#f472b6" },
+  { id: "ema20",  label: "EMA 20",  color: "#a3e635", dash: [5, 3] },
+  { id: "ema50",  label: "EMA 50",  color: "#c084fc", dash: [5, 3] },
+  { id: "bb",     label: "Bollinger Bands (20, 2σ)" },
+  { id: "rsi",    label: "RSI (14)" },
+  { id: "macd",   label: "MACD (12, 26, 9)" },
+  { id: "pivots", label: "Pivot Points" },
+  { id: "patterns", label: "Σχηματισμοί candlesticks" },
+  { id: "_sens",  label: "" }
+];
+let ind = {};
+(function loadInd() {
+  try { ind = JSON.parse(localStorage.getItem(IND_KEY) || "{}") || {}; } catch (e) { ind = {}; }
+  // migrate the earlier standalone Bollinger toggle
+  try { if (ind.bb === undefined && localStorage.getItem("crypto_tracker_bollinger_v1") === "1") ind.bb = true; } catch (e) {}
+})();
+if (ind.patterns === undefined) ind.patterns = true;               // pattern recognition ON by default
+if (!["loose", "normal", "strict"].includes(ind.sens)) ind.sens = "normal";
+const SENS_LABEL = { loose: "Χαλαρή", normal: "Κανονική", strict: "Αυστηρή" };
+function saveInd() { try { localStorage.setItem(IND_KEY, JSON.stringify(ind)); } catch (e) {} }
+
+function refreshIndicatorMenu() {
+  const sel = document.getElementById("indicatorSelect");
+  if (!sel) return;
+  const count = IND_DEFS.filter(d => ind[d.id]).length;
+  sel.innerHTML = `<option value="" style="background:#1a1f2e;color:#38bdf8;">📊 Δείκτες${count ? " (" + count + ")" : ""}</option>` +
+    IND_DEFS.map(d => d.id === "_sens"
+      ? `<option value="_sens" style="background:#1a1f2e;color:#38bdf8;">⚙ Ευαισθησία σχηματισμών: ${SENS_LABEL[ind.sens]} (κλικ για αλλαγή)</option>`
+      : `<option value="${d.id}" style="background:#1a1f2e;color:#38bdf8;">${ind[d.id] ? "✔" : "◻"} ${d.label}</option>`
+    ).join("");
+  sel.selectedIndex = 0;
+}
+document.getElementById("indicatorSelect").addEventListener("change", (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  if (id === "_sens") cycleSensitivity(); else ind[id] = !ind[id];
+  saveInd();
+  refreshIndicatorMenu();
+  applyIndicators();
+});
+refreshIndicatorMenu();
+
+// Re-render the chart with the new indicator set, keeping the current zoom/pan window
+function applyIndicators() {
+  if (!bigChart) return;
+  const xs = bigChart.options.scales.x;
+  const keepMin = xs.min, keepMax = xs.max;
+  renderBigChart();
+  if (bigChart && keepMin !== undefined) {
+    bigChart.options.scales.x.min = keepMin;
+    bigChart.options.scales.x.max = keepMax;
+    bigChart.update("none");
+  }
+}
+
+/* -- maths -- */
+function smaSeries(vals, p) {
+  const out = new Array(vals.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < vals.length; i++) {
+    sum += vals[i];
+    if (i >= p) sum -= vals[i - p];
+    if (i >= p - 1) out[i] = sum / p;
+  }
+  return out;
+}
+function emaSeries(vals, p, startIdx = 0) {
+  // seeded with the SMA of the first p valid values (starting at startIdx)
+  const out = new Array(vals.length).fill(null);
+  if (vals.length - startIdx < p) return out;
+  const k = 2 / (p + 1);
+  let sum = 0;
+  for (let i = startIdx; i < startIdx + p; i++) sum += vals[i];
+  let prev = sum / p;
+  out[startIdx + p - 1] = prev;
+  for (let i = startIdx + p; i < vals.length; i++) {
+    prev = vals[i] * k + prev * (1 - k);
+    out[i] = prev;
+  }
+  return out;
+}
+function rsiSeries(closes, p = 14) {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length <= p) return out;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= p; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gain += d; else loss -= d;
+  }
+  gain /= p; loss /= p;
+  const rs2rsi = (g, l) => l === 0 ? (g === 0 ? 50 : 100) : 100 - 100 / (1 + g / l);
+  out[p] = rs2rsi(gain, loss);
+  for (let i = p + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    gain = (gain * (p - 1) + (d > 0 ? d : 0)) / p;
+    loss = (loss * (p - 1) + (d < 0 ? -d : 0)) / p;
+    out[i] = rs2rsi(gain, loss);
+  }
+  return out;
+}
+function macdSeries(closes, fast = 12, slow = 26, sig = 9) {
+  const ef = emaSeries(closes, fast), es = emaSeries(closes, slow);
+  const macd = closes.map((_, i) => (ef[i] !== null && es[i] !== null) ? ef[i] - es[i] : null);
+  const first = macd.findIndex(v => v !== null);
+  const signal = first === -1 ? macd.map(() => null) : emaSeries(macd.map(v => v === null ? 0 : v), sig, first);
+  const hist = macd.map((v, i) => (v !== null && signal[i] !== null) ? v - signal[i] : null);
+  return { macd, signal, hist };
+}
+function computeBollinger(candles) {
+  const closes = candles.map(c => c[4]);
+  const out = [];
+  for (let i = BB_PERIOD - 1; i < closes.length; i++) {
+    let sum = 0;
+    for (let j = i - BB_PERIOD + 1; j <= i; j++) sum += closes[j];
+    const mean = sum / BB_PERIOD;
+    let sq = 0;
+    for (let j = i - BB_PERIOD + 1; j <= i; j++) sq += (closes[j] - mean) ** 2;
+    const sd = Math.sqrt(sq / BB_PERIOD);
+    out.push({ x: candles[i][0], mid: mean, up: mean + BB_MULT * sd, lo: mean - BB_MULT * sd });
+  }
+  return out;
+}
+const BB_PERIOD = 20, BB_MULT = 2;
+
+// Overlay datasets drawn on the main price axis
+function buildOverlayDatasets(candles) {
+  const ds = [];
+  const closes = candles.map(c => c[4]);
+  const line = (label, vals, color, dash) => {
+    const data = [];
+    vals.forEach((v, i) => { if (v !== null) data.push({ x: candles[i][0], y: v }); });
+    if (!data.length) return;
+    ds.push({
+      label, type: "line", data, borderColor: color, borderWidth: 1.3,
+      borderDash: dash || [], pointRadius: 0, fill: false, yAxisID: "y", order: 5
+    });
+  };
+  IND_DEFS.forEach(d => {
+    if (!ind[d.id]) return;
+    if (d.id.startsWith("sma")) line(d.label, smaSeries(closes, parseInt(d.id.slice(3))), d.color, d.dash);
+    if (d.id.startsWith("ema")) line(d.label, emaSeries(closes, parseInt(d.id.slice(3))), d.color, d.dash);
+  });
+  if (ind.bb) {
+    const bb = computeBollinger(candles);
+    if (bb.length) {
+      ds.push({
+        label: "BB Άνω", type: "line", data: bb.map(b => ({ x: b.x, y: b.up })),
+        borderColor: "rgba(56,189,248,0.85)", borderWidth: 1.2, pointRadius: 0,
+        fill: "+1", backgroundColor: "rgba(56,189,248,0.08)", yAxisID: "y", order: 5
+      });
+      ds.push({
+        label: "BB Κάτω", type: "line", data: bb.map(b => ({ x: b.x, y: b.lo })),
+        borderColor: "rgba(56,189,248,0.85)", borderWidth: 1.2, pointRadius: 0,
+        fill: false, yAxisID: "y", order: 5
+      });
+      ds.push({
+        label: "BB Μέση (SMA 20)", type: "line", data: bb.map(b => ({ x: b.x, y: b.mid })),
+        borderColor: "rgba(250,204,21,0.8)", borderWidth: 1, borderDash: [5, 4], pointRadius: 0,
+        fill: false, yAxisID: "y", order: 5
+      });
+    }
+  }
+  return ds;
+}
+
+/* -- Pivot points (classic). Levels for each period come from the previous period's H/L/C:
+      intraday charts → daily pivots, 1d → weekly pivots, 1w → monthly pivots. -- */
+let currentPivotSegs = null;
+const PIVOT_LEVELS = [
+  { id: "R3", color: "#ef4444" }, { id: "R2", color: "#f87171" }, { id: "R1", color: "#fca5a5" },
+  { id: "PP", color: "#e5e7eb" },
+  { id: "S1", color: "#86efac" }, { id: "S2", color: "#4ade80" }, { id: "S3", color: "#22c55e" }
+];
+function pivotGroupKey(ts) {
+  if (currentInterval === "1w") { const d = new Date(ts); return d.getUTCFullYear() * 12 + d.getUTCMonth(); }
+  if (currentInterval === "1d") return Math.floor((Math.floor(ts / 86400000) + 3) / 7); // Monday-based weeks
+  return Math.floor(ts / 86400000);
+}
+function computePivotSegments(candles) {
+  // group candles by period
+  const groups = [];
+  candles.forEach(c => {
+    const k = pivotGroupKey(c[0]);
+    const g = groups[groups.length - 1];
+    if (g && g.key === k) {
+      g.h = Math.max(g.h, c[2]); g.l = Math.min(g.l, c[3]); g.c = c[4]; g.last = c[0];
+    } else {
+      groups.push({ key: k, first: c[0], last: c[0], h: c[2], l: c[3], c: c[4] });
+    }
+  });
+  if (groups.length < 2) return null;
+  const segs = PIVOT_LEVELS.map(l => ({ id: l.id, color: l.color, list: [] }));
+  for (let i = 1; i < groups.length; i++) {
+    const pg = groups[i - 1], g = groups[i];
+    const pp = (pg.h + pg.l + pg.c) / 3, rng = pg.h - pg.l;
+    const val = {
+      R3: pg.h + 2 * (pp - pg.l), R2: pp + rng, R1: 2 * pp - pg.l, PP: pp,
+      S1: 2 * pp - pg.h, S2: pp - rng, S3: pg.l - 2 * (pg.h - pp)
+    };
+    const isLast = i === groups.length - 1;
+    segs.forEach(sg => sg.list.push({
+      x1: g.first, x2: isLast ? null : groups[i + 1].first, y: val[sg.id], open: isLast
+    }));
+  }
+  return segs;
+}
+const pivotPlugin = {
+  id: "pivotPlugin",
+  afterDatasetsDraw(chart) {
+    if (chart !== bigChart || !currentPivotSegs) return;
+    const { ctx, chartArea, scales } = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+    ctx.font = "10px sans-serif";
+    ctx.textBaseline = "bottom";
+    currentPivotSegs.forEach(sg => {
+      ctx.strokeStyle = sg.color;
+      ctx.lineWidth = sg.id === "PP" ? 1.4 : 1;
+      ctx.setLineDash(sg.id === "PP" ? [] : [6, 4]);
+      sg.list.forEach(seg => {
+        const y = scales.y.getPixelForValue(seg.y);
+        if (y < chartArea.top - 2 || y > chartArea.bottom + 2) return;
+        const x1 = Math.max(chartArea.left, scales.x.getPixelForValue(seg.x1));
+        const x2 = seg.open ? chartArea.right : Math.min(chartArea.right, scales.x.getPixelForValue(seg.x2));
+        if (x2 <= chartArea.left || x1 >= chartArea.right || x2 <= x1) return;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        if (seg.open) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = sg.color;
+          ctx.textAlign = "right";
+          ctx.fillText(`${sg.id} ${formatNumber(seg.y, currentModalCoinId)}`, chartArea.right - 4, y - 2);
+          ctx.setLineDash(sg.id === "PP" ? [] : [6, 4]);
+        }
+      });
+    });
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(pivotPlugin);
+
+/* -- Candlestick pattern recognition (rule based, ενδεικτικό — όχι επενδυτική συμβουλή) -- */
+let currentPatterns = null; // { list: [{i,len,name,dir}], candles }
+
+const PATTERN_SENS = {
+  loose:  { trend: 0.40, longBody: 0.50, doji: 0.15, tweezer: 0.100, minRange: 0.5, wick: 1.5, maru: 0.85, maruRange: 1.0, engulf: 1.0, harami: 0.75 },
+  normal: { trend: 0.75, longBody: 0.60, doji: 0.10, tweezer: 0.050, minRange: 0.7, wick: 2.0, maru: 0.90, maruRange: 1.1, engulf: 1.0, harami: 0.60 },
+  strict: { trend: 1.10, longBody: 0.70, doji: 0.06, tweezer: 0.025, minRange: 1.0, wick: 3.0, maru: 0.95, maruRange: 1.3, engulf: 1.3, harami: 0.40 }
+};
+function cycleSensitivity() {
+  const order = ["loose", "normal", "strict"];
+  ind.sens = order[(order.indexOf(ind.sens) + 1) % order.length];
+  saveInd();
+  syncSplitPatternControls();
+  if (document.getElementById("splitViewModal").classList.contains("open")) loadSplitCharts();
+}
+
+function detectCandlePatterns(candles) {
+  const t = PATTERN_SENS[ind.sens] || PATTERN_SENS.normal;
+  const n = candles.length, out = [];
+  if (n < 8) return out;
+  const O = i => candles[i][1], H = i => candles[i][2], L = i => candles[i][3], C = i => candles[i][4];
+  const body = i => Math.abs(C(i) - O(i)), rng = i => H(i) - L(i);
+  const up = i => C(i) > O(i), dn = i => C(i) < O(i);
+  const upW = i => H(i) - Math.max(O(i), C(i)), loW = i => Math.min(O(i), C(i)) - L(i);
+  const mid = i => (O(i) + C(i)) / 2;
+  const trendBefore = (s, avg) => {
+    if (s < 6) return 0;
+    const d = C(s - 1) - C(s - 6);
+    return d > t.trend * avg ? 1 : d < -t.trend * avg ? -1 : 0;
+  };
+  for (let i = 6; i < n; i++) {
+    let sum = 0, cnt = 0;
+    for (let j = Math.max(0, i - 14); j < i; j++) { sum += rng(j); cnt++; }
+    const avg = (sum / cnt) || 1e-12;
+    let hit = null;
+    const a3 = i - 2, b3 = i - 1, c3 = i;
+    const tr3 = trendBefore(a3, avg);
+
+    // ---- three candles ----
+    if (tr3 < 0 && dn(a3) && body(a3) >= t.longBody * rng(a3) && body(b3) <= 0.35 * body(a3) &&
+        Math.max(O(b3), C(b3)) <= C(a3) + 0.15 * body(a3) && up(c3) && C(c3) > mid(a3) && body(c3) >= 0.5 * body(a3)) {
+      hit = { len: 3, name: "Αστέρι της Αυγής (Morning Star)", dir: "bull" };
+    } else if (tr3 > 0 && up(a3) && body(a3) >= t.longBody * rng(a3) && body(b3) <= 0.35 * body(a3) &&
+        Math.min(O(b3), C(b3)) >= C(a3) - 0.15 * body(a3) && dn(c3) && C(c3) < mid(a3) && body(c3) >= 0.5 * body(a3)) {
+      hit = { len: 3, name: "Αστέρι του Δειλινού (Evening Star)", dir: "bear" };
+    } else if (tr3 <= 0 && [a3, b3, c3].every(k => up(k) && body(k) >= (t.longBody - 0.1) * rng(k) && upW(k) <= 0.35 * body(k)) &&
+        C(b3) > C(a3) && C(c3) > C(b3) && O(b3) >= O(a3) && O(b3) <= C(a3) && O(c3) >= O(b3) && O(c3) <= C(b3)) {
+      hit = { len: 3, name: "Τρεις Λευκοί Στρατιώτες (Three White Soldiers)", dir: "bull" };
+    } else if (tr3 >= 0 && [a3, b3, c3].every(k => dn(k) && body(k) >= (t.longBody - 0.1) * rng(k) && loW(k) <= 0.35 * body(k)) &&
+        C(b3) < C(a3) && C(c3) < C(b3) && O(b3) <= O(a3) && O(b3) >= C(a3) && O(c3) <= O(b3) && O(c3) >= C(b3)) {
+      hit = { len: 3, name: "Τρία Μαύρα Κοράκια (Three Black Crows)", dir: "bear" };
+    }
+
+    // ---- two candles ----
+    if (!hit) {
+      const a = i - 1, b = i, tr = trendBefore(a, avg);
+      if (tr < 0 && dn(a) && up(b) && body(a) > 0 && O(b) <= C(a) && C(b) >= O(a) && body(b) > t.engulf * body(a)) {
+        hit = { len: 2, name: "Ανοδική Κατάποση (Bullish Engulfing)", dir: "bull" };
+      } else if (tr > 0 && up(a) && dn(b) && body(a) > 0 && O(b) >= C(a) && C(b) <= O(a) && body(b) > t.engulf * body(a)) {
+        hit = { len: 2, name: "Πτωτική Κατάποση (Bearish Engulfing)", dir: "bear" };
+      } else if (tr < 0 && dn(a) && body(a) >= t.longBody * rng(a) && up(b) && O(b) <= C(a) && C(b) > mid(a) && C(b) < O(a)) {
+        hit = { len: 2, name: "Διαπεραστική Γραμμή (Piercing Line)", dir: "bull" };
+      } else if (tr > 0 && up(a) && body(a) >= t.longBody * rng(a) && dn(b) && O(b) >= C(a) && C(b) < mid(a) && C(b) > O(a)) {
+        hit = { len: 2, name: "Σκοτεινό Σύννεφο (Dark Cloud Cover)", dir: "bear" };
+      } else if (tr < 0 && dn(a) && body(a) >= t.longBody * rng(a) && up(b) && O(b) > C(a) && C(b) < O(a) && body(b) <= t.harami * body(a)) {
+        hit = { len: 2, name: "Ανοδικό Harami (Bullish Harami)", dir: "bull" };
+      } else if (tr > 0 && up(a) && body(a) >= t.longBody * rng(a) && dn(b) && O(b) < C(a) && C(b) > O(a) && body(b) <= t.harami * body(a)) {
+        hit = { len: 2, name: "Πτωτικό Harami (Bearish Harami)", dir: "bear" };
+      } else if (tr < 0 && dn(a) && up(b) && Math.abs(L(a) - L(b)) <= t.tweezer * avg) {
+        hit = { len: 2, name: "Τσιμπίδα Πυθμένα (Tweezer Bottom)", dir: "bull" };
+      } else if (tr > 0 && up(a) && dn(b) && Math.abs(H(a) - H(b)) <= t.tweezer * avg) {
+        hit = { len: 2, name: "Τσιμπίδα Κορυφής (Tweezer Top)", dir: "bear" };
+      }
+    }
+
+    // ---- single candle ----
+    if (!hit) {
+      const r = rng(i), b = body(i), tr = trendBefore(i, avg);
+      if (r > t.minRange * avg && b <= t.doji * r) {
+        if (loW(i) >= 0.6 * r && upW(i) <= 0.1 * r) hit = { len: 1, name: "Doji Λιβελούλα (Dragonfly Doji)", dir: "neutral" };
+        else if (upW(i) >= 0.6 * r && loW(i) <= 0.1 * r) hit = { len: 1, name: "Doji Ταφόπλακα (Gravestone Doji)", dir: "neutral" };
+        else hit = { len: 1, name: "Doji", dir: "neutral" };
+      } else if (b > 0 && r >= t.minRange * avg) {
+        if (loW(i) >= t.wick * b && upW(i) <= 0.3 * b) {
+          if (tr < 0) hit = { len: 1, name: "Σφυρί (Hammer)", dir: "bull" };
+          else if (tr > 0) hit = { len: 1, name: "Κρεμασμένος (Hanging Man)", dir: "bear" };
+        } else if (upW(i) >= t.wick * b && loW(i) <= 0.3 * b) {
+          if (tr < 0) hit = { len: 1, name: "Ανεστραμμένο Σφυρί (Inverted Hammer)", dir: "bull" };
+          else if (tr > 0) hit = { len: 1, name: "Πεφταστέρι (Shooting Star)", dir: "bear" };
+        }
+        if (!hit && b >= t.maru * r && r >= t.maruRange * avg) {
+          hit = up(i) ? { len: 1, name: "Marubozu ανοδικό", dir: "bull" } : { len: 1, name: "Marubozu πτωτικό", dir: "bear" };
+        }
+      }
+    }
+    if (hit) out.push({ i, len: hit.len, name: hit.name, dir: hit.dir });
+  }
+  return out;
+}
+
+const PATTERN_DIR_COLOR = { bull: "#3ddc97", bear: "#ff5c6c", neutral: "#9aa1ac" };
+
+// Shared marker renderer used by the main chart and the split-view charts
+function drawPatternMarkers(chart, patterns, cursorX, lineMode) {
+  const { ctx, chartArea, scales } = chart;
+  const { list, candles } = patterns;
+  let hover = null;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(chartArea.left, chartArea.top - 12, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top + 24);
+  ctx.clip();
+  list.forEach(p => {
+    const c = candles[p.i];
+    const x = scales.x.getPixelForValue(c[0]);
+    if (x < chartArea.left || x > chartArea.right) return;
+    const color = PATTERN_DIR_COLOR[p.dir];
+    const lowV = lineMode ? c[4] : c[3], highV = lineMode ? c[4] : c[2];
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    let my;
+    if (p.dir === "bull") {            // ▲ below the low
+      my = scales.y.getPixelForValue(lowV) + 9;
+      ctx.moveTo(x, my - 5); ctx.lineTo(x - 5, my + 4); ctx.lineTo(x + 5, my + 4);
+    } else if (p.dir === "bear") {     // ▼ above the high
+      my = scales.y.getPixelForValue(highV) - 9;
+      ctx.moveTo(x, my + 5); ctx.lineTo(x - 5, my - 4); ctx.lineTo(x + 5, my - 4);
+    } else {                           // ◆ neutral above the high
+      my = scales.y.getPixelForValue(highV) - 9;
+      ctx.moveTo(x, my - 5); ctx.lineTo(x + 5, my); ctx.lineTo(x, my + 5); ctx.lineTo(x - 5, my);
+    }
+    ctx.closePath(); ctx.fill();
+    if (p.len > 1) { // bracket showing how many candles the pattern spans
+      const x0 = scales.x.getPixelForValue(candles[p.i - p.len + 1][0]);
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.moveTo(x0, my); ctx.lineTo(x, my); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (cursorX !== null && cursorX !== undefined && Math.abs(cursorX - x) <= 7) hover = { p, x, my, color };
+  });
+  ctx.restore();
+
+  if (hover) {
+    ctx.save();
+    ctx.font = "bold 11px sans-serif";
+    const text = hover.p.name;
+    const w = ctx.measureText(text).width + 12;
+    const bx = Math.min(Math.max(chartArea.left, hover.x - w / 2), chartArea.right - w);
+    const by = hover.p.dir === "bull" ? hover.my + 12 : hover.my - 30;
+    ctx.fillStyle = "rgba(20,24,34,0.95)";
+    ctx.strokeStyle = hover.color;
+    ctx.lineWidth = 1;
+    ctx.fillRect(bx, by, w, 20); ctx.strokeRect(bx, by, w, 20);
+    ctx.fillStyle = hover.color;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, bx + w / 2, by + 10);
+    ctx.restore();
+  }
+}
+
+const candlePatternPlugin = {
+  id: "candlePatternPlugin",
+  afterDatasetsDraw(chart) {
+    if (chart !== bigChart || !currentPatterns) return;
+    drawPatternMarkers(chart, currentPatterns, crosshairPlugin._x, false);
+  }
+};
+const splitPatternPlugin = {
+  id: "splitPatternPlugin",
+  afterDatasetsDraw(chart) {
+    if (!chart.$patterns) return;
+    drawPatternMarkers(chart, chart.$patterns, chart.$crosshair ? chart.$crosshair.x : null, chart.$patterns.line);
+  }
+};
+if (typeof Chart !== "undefined") { Chart.register(candlePatternPlugin); Chart.register(splitPatternPlugin); }
+
+function renderCandlePatternRow() {
+  const row = document.getElementById("candlePatternRow");
+  if (!row) return;
+  if (!currentPatterns) { row.style.display = "none"; row.innerHTML = ""; return; }
+  const { list, candles } = currentPatterns;
+  row.style.display = "flex";
+  if (!list.length) {
+    row.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem;">🕯 Δεν εντοπίστηκαν σχηματισμοί σε αυτό το διάστημα.</span>`;
+    return;
+  }
+  const recent = list.slice(-8).reverse();
+  const fmt = (ts) => new Date(ts).toLocaleString("el-GR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const bull = list.filter(p => p.dir === "bull").length, bear = list.filter(p => p.dir === "bear").length;
+  row.innerHTML = `<span style="color:var(--text-dim);font-size:0.8rem;">🕯 Σχηματισμοί (${list.length}: <span style="color:#3ddc97">▲${bull}</span> <span style="color:#ff5c6c">▼${bear}</span>) · ευαισθησία: ${SENS_LABEL[ind.sens]} · τελευταίοι:</span>` +
+    recent.map(p => {
+      const col = PATTERN_DIR_COLOR[p.dir];
+      const sym = p.dir === "bull" ? "▲" : p.dir === "bear" ? "▼" : "◆";
+      return `<button class="small" data-i="${p.i}" title="Κλικ για μετακίνηση στο κερί" style="font-size:0.74rem;padding:0.15rem 0.45rem;border-color:${col};color:${col};">${sym} ${p.name.split(" (")[0]} · ${fmt(candles[p.i][0])}</button>`;
+    }).join("") +
+    `<span style="color:var(--text-dim);font-size:0.72rem;">(ενδεικτικά — όχι επενδυτική συμβουλή)</span>`;
+  row.querySelectorAll("button[data-i]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!bigChart) return;
+      const t = candles[parseInt(btn.dataset.i)][0];
+      const xs = bigChart.scales.x;
+      const half = (xs.max - xs.min) / 2;
+      bigChart.options.scales.x.min = t - half;
+      bigChart.options.scales.x.max = t + half;
+      bigChart.update("none");
+    });
+  });
+}
+
+/* -- RSI / MACD sub-panels: separate canvases whose x-range is kept in sync with the main chart -- */
+let subCharts = { rsi: null, macd: null };
+let subLayout = { left: 60, right: 0 };
+let subCrossTime = null;
+
+function destroySubCharts() {
+  Object.keys(subCharts).forEach(k => { if (subCharts[k]) { subCharts[k].destroy(); subCharts[k] = null; } });
+  const wrap = document.getElementById("subPanels");
+  if (wrap) wrap.style.display = "none";
+  ["rsiPanel", "macdPanel"].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = "none"; });
+}
+
+const subPanelPlugin = {
+  id: "subPanelPlugin",
+  beforeDatasetsDraw(chart) {
+    if (!chart.$subKind) return;
+    const { ctx, chartArea, scales } = chart;
+    if (chart.$subKind === "rsi") {
+      const y70 = scales.y.getPixelForValue(70), y30 = scales.y.getPixelForValue(30);
+      ctx.save();
+      ctx.fillStyle = "rgba(148,163,184,0.07)";
+      ctx.fillRect(chartArea.left, y70, chartArea.right - chartArea.left, y30 - y70);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "rgba(148,163,184,0.45)";
+      [y70, y30].forEach(y => { ctx.beginPath(); ctx.moveTo(chartArea.left, y); ctx.lineTo(chartArea.right, y); ctx.stroke(); });
+      ctx.restore();
+    } else if (chart.$subKind === "macd") {
+      const y0 = scales.y.getPixelForValue(0);
+      ctx.save();
+      ctx.strokeStyle = "rgba(148,163,184,0.45)";
+      ctx.beginPath(); ctx.moveTo(chartArea.left, y0); ctx.lineTo(chartArea.right, y0); ctx.stroke();
+      ctx.restore();
+    }
+  },
+  afterDraw(chart) {
+    if (!chart.$subKind) return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#9aa1ac";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(chart.$subTitle || "", chartArea.left + 6, chartArea.top + 4);
+    if (subCrossTime !== null) {
+      const x = chart.scales.x.getPixelForValue(subCrossTime);
+      if (x >= chartArea.left && x <= chartArea.right) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(200,200,200,0.4)";
+        ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(subPanelPlugin);
+
+function makeSubChart(canvasId, kind, datasets, title, yOpts) {
+  const canvas = document.getElementById(canvasId);
+  const chart = new Chart(canvas, {
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, events: [],
+      layout: { padding: { right: subLayout.right } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { type: "time", ticks: { display: false }, grid: { color: "rgba(255,255,255,0.05)" } },
+        y: {
+          ...yOpts,
+          grid: { color: "rgba(255,255,255,0.05)" },
+          afterFit: (scale) => { scale.width = subLayout.left; }
+        }
+      }
+    }
+  });
+  chart.$subKind = kind;
+  chart.$subTitle = title;
+  return chart;
+}
+
+function buildSubCharts(candles) {
+  destroySubCharts();
+  if (!candles || !candles.length || (!ind.rsi && !ind.macd)) return;
+  const closes = candles.map(c => c[4]);
+  const xs = candles.map(c => c[0]);
+  const pts = (arr) => { const o = []; arr.forEach((v, i) => { if (v !== null) o.push({ x: xs[i], y: v }); }); return o; };
+  const fmt = (v, d = 2) => v === null || v === undefined ? "—" : v.toFixed(d);
+  const lastOf = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] !== null) return arr[i]; return null; };
+  const wrap = document.getElementById("subPanels");
+  wrap.style.display = "block";
+
+  if (ind.rsi) {
+    document.getElementById("rsiPanel").style.display = "block";
+    const rsi = rsiSeries(closes, 14);
+    subCharts.rsi = makeSubChart("rsiChart", "rsi", [{
+      label: "RSI", type: "line", data: pts(rsi), borderColor: "#a78bfa", borderWidth: 1.4,
+      pointRadius: 0, fill: false
+    }], `RSI (14)  ${fmt(lastOf(rsi))}`, {
+      min: 0, max: 100,
+      afterBuildTicks: (scale) => { scale.ticks = [0, 30, 50, 70, 100].map(v => ({ value: v })); },
+      ticks: { color: "#9aa1ac" }
+    });
+  }
+  if (ind.macd) {
+    document.getElementById("macdPanel").style.display = "block";
+    const m = macdSeries(closes);
+    const hist = pts(m.hist);
+    const dec = closes[closes.length - 1] < 1 ? 5 : closes[closes.length - 1] < 100 ? 3 : 2;
+    subCharts.macd = makeSubChart("macdChart", "macd", [
+      {
+        label: "Hist", type: "bar", data: hist,
+        backgroundColor: hist.map(h => h.y >= 0 ? "rgba(61,220,151,0.55)" : "rgba(255,92,108,0.55)"),
+        borderWidth: 0, barPercentage: 0.8, categoryPercentage: 1.0
+      },
+      { label: "MACD", type: "line", data: pts(m.macd), borderColor: "#4f8cff", borderWidth: 1.3, pointRadius: 0, fill: false },
+      { label: "Signal", type: "line", data: pts(m.signal), borderColor: "#f59e0b", borderWidth: 1.3, pointRadius: 0, fill: false }
+    ], `MACD (12,26,9)  ${fmt(lastOf(m.macd), dec)} / ${fmt(lastOf(m.signal), dec)}`, {
+      ticks: { color: "#9aa1ac", maxTicksLimit: 4, callback: (v) => { const a = Math.abs(v); return a >= 1000 ? (v / 1000).toFixed(1) + "k" : a >= 10 ? v.toFixed(0) : a >= 1 ? v.toFixed(1) : v.toPrecision(2); } }
+    });
+  }
+  syncSubCharts();
+}
+
+function syncSubCharts() {
+  if (!bigChart || !bigChart.scales || !bigChart.scales.x) return;
+  const xs = bigChart.scales.x;
+  const L = Math.round(bigChart.chartArea.left);
+  const R = Math.max(0, Math.round(bigChart.width - bigChart.chartArea.right));
+  subLayout.left = L; subLayout.right = R;
+  Object.values(subCharts).forEach(c => {
+    if (!c) return;
+    c.options.scales.x.min = xs.min;
+    c.options.scales.x.max = xs.max;
+    c.options.layout.padding = { right: R };
+    c.update("none");
+  });
+}
+
+function onMainCrosshair(xPx) {
+  subCrossTime = (xPx !== null && bigChart && bigChart.scales.x) ? bigChart.scales.x.getValueForPixel(xPx) : null;
+  Object.values(subCharts).forEach(c => { if (c) c.draw(); });
+}
+
+// Keep the sub-panels aligned with the main chart on every zoom/pan/resize/update
+const subSyncPlugin = {
+  id: "subSyncPlugin",
+  afterUpdate(chart) {
+    if (chart !== bigChart) return;
+    syncSubCharts();
+  }
+};
+if (typeof Chart !== "undefined") Chart.register(subSyncPlugin);
+
 // Drawing tools dropdown — maps option values to existing button click handlers
 document.getElementById("drawingToolSelect").addEventListener("change", (e) => {
   const val = e.target.value;
@@ -2855,8 +3478,27 @@ function populateSplitSelects() {
   });
 }
 
+function syncSplitPatternControls() {
+  const btn = document.getElementById("splitPatternBtn"), sel = document.getElementById("splitSensSelect");
+  if (btn) btn.style.opacity = ind.patterns ? "1" : "0.45";
+  if (sel) sel.value = ind.sens;
+}
+document.getElementById("splitPatternBtn").addEventListener("click", () => {
+  ind.patterns = !ind.patterns;
+  saveInd(); refreshIndicatorMenu(); syncSplitPatternControls();
+  loadSplitCharts();
+  applyIndicators();
+});
+document.getElementById("splitSensSelect").addEventListener("change", (e) => {
+  ind.sens = e.target.value;
+  saveInd(); refreshIndicatorMenu();
+  loadSplitCharts();
+  applyIndicators();
+});
+
 document.getElementById("splitViewBtn").addEventListener("click", () => {
   populateSplitSelects();
+  syncSplitPatternControls();
   document.getElementById("splitViewModal").classList.add("open");
   loadSplitCharts();
 });
@@ -2919,6 +3561,16 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
   const existing = canvasId === "splitChartA" ? splitChartA : splitChartB;
   if (existing) existing.destroy();
 
+  // Candlestick patterns (shared toggle/sensitivity with the main chart)
+  const splitPatterns = ind.patterns ? { list: detectCandlePatterns(candles), candles, line: chartType === "line" } : null;
+  let patternBadge = "";
+  if (splitPatterns && visible.length) {
+    const t0 = visible[0][0];
+    const inView = splitPatterns.list.filter(p => candles[p.i][0] >= t0);
+    const bu = inView.filter(p => p.dir === "bull").length, be = inView.filter(p => p.dir === "bear").length;
+    patternBadge = ` <span style="font-size:0.75rem; font-weight:500; color:var(--text-dim);">🕯 <span style="color:#3ddc97">▲${bu}</span> <span style="color:#ff5c6c">▼${be}</span></span>`;
+  }
+
   // Current price + change vs previous candle, shown in the title row
   const last = visible[visible.length - 1];
   const prev = visible[visible.length - 2];
@@ -2927,7 +3579,7 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
     const isUp = prev ? last[4] >= prev[4] : true;
     const color = isUp ? "#3ddc97" : "#ff5c6c";
     const coinName = latestMarketData[coinId]?.name || coinId;
-    titleEl.innerHTML = `${coinName} &nbsp; <span style="color:${color}; font-weight:700;">${currencySymbol()}${formatNumber(last[4], coinId)} ${isUp ? "▲" : "▼"}</span>`;
+    titleEl.innerHTML = `${coinName} &nbsp; <span style="color:${color}; font-weight:700;">${currencySymbol()}${formatNumber(last[4], coinId)} ${isUp ? "▲" : "▼"}</span>${patternBadge}`;
   }
 
   const commonScales = {
@@ -2971,6 +3623,9 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
         datasets: [{
           label: "OHLC",
           data: ohlcData,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 6,
           candleData: true,
           upColor: "#3ddc97",
           downColor: "#ff5c6c"
@@ -2999,6 +3654,8 @@ function renderSplitChart(canvasId, candles, coinId, limit, chartType) {
   // Tag the chart instance with its coin so the shared crosshair plugin
   // can format the price label with the right decimals.
   chart.$coinId = coinId;
+  chart.$patterns = splitPatterns;
+  chart.update("none");
 
   if (canvasId === "splitChartA") splitChartA = chart; else splitChartB = chart;
 }
@@ -3016,7 +3673,7 @@ const splitCrosshairPlugin = {
       const pos = Chart.helpers.getRelativePosition(evt, chart);
       const inArea = pos.y >= chart.chartArea.top && pos.y <= chart.chartArea.bottom
                   && pos.x >= chart.chartArea.left && pos.x <= chart.chartArea.right;
-      chart.$crosshair = inArea ? { y: pos.y } : null;
+      chart.$crosshair = inArea ? { x: pos.x, y: pos.y } : null;
     } else if (evt.type === "mouseout") {
       chart.$crosshair = null;
     }
@@ -4979,6 +5636,9 @@ function closeChartModal() {
     bigChart = null;
   }
   document.getElementById("modalOhlcTicker").textContent = "";
+  destroySubCharts();
+  currentPatterns = null; currentPivotSegs = null;
+  renderCandlePatternRow();
   analysisCustomRange = null;
   analysisDragState = null;
   document.getElementById("selectionOverlay").style.display = "none";
@@ -5257,6 +5917,9 @@ function renderBigChart(candles) {
     showLine: false, hidden: false, legend: false, fill: false, yAxisID: "y"
   });
 
+  // Indicator overlays (SMA/EMA/Bollinger)
+  buildOverlayDatasets(candles).forEach(d => datasets.push(d));
+
   // Volume bars on a secondary y-axis (right side, max = 4× so bars stay
   // in the bottom ~25% of the chart and don't obscure candlesticks)
   const hasVolume = candles.some(c => c[5] > 0);
@@ -5309,6 +5972,9 @@ function renderBigChart(candles) {
     week:   "dd/MM/yy",
     month:  "MM/yy"
   };
+
+  currentPivotSegs = ind.pivots ? computePivotSegments(candles) : null;
+  currentPatterns = ind.patterns ? { list: detectCandlePatterns(candles), candles } : null;
 
   bigChart = new Chart(bigChartCanvas, {
     data: { datasets },
@@ -5402,6 +6068,9 @@ function renderBigChart(candles) {
     bigChart.options.scales.x.max = lastTs + pad;
     bigChart.update("none");
   }
+
+  buildSubCharts(candles);
+  renderCandlePatternRow();
 }
 
 // cache last candle data so the chart can be redrawn (e.g. clearing lines)

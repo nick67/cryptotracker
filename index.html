@@ -145,7 +145,21 @@
   .modal-tools .hint { color: var(--text-dim); font-size: 0.78rem; }
   .modal-tools button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .big-chart-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
-  .sub-panel { position: relative; height: 110px; border-top: 1px solid var(--border); }
+  .sub-panel { position: relative; height: 110px; border-top: 1px solid var(--border); cursor: pointer; }
+  .sub-resize-handle { position: absolute; left: 0; right: 0; top: -5px; height: 10px; cursor: ns-resize; z-index: 5; }
+  .sub-resize-handle::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: rgba(148,163,184,0.45); }
+  .sub-resize-handle:hover::after { background: #38bdf8; }
+  #infoWindow { display: none; position: fixed; z-index: 400; flex-direction: column; width: 380px; height: 280px;
+    min-width: 240px; min-height: 110px; max-width: 94vw; max-height: 88vh; resize: both; overflow: hidden;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.65); }
+  #infoWindowHead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.7rem;
+    border-bottom: 1px solid var(--border); cursor: move; user-select: none; background: var(--panel-2); flex-shrink: 0; }
+  #infoWindowTitle { font-size: 0.86rem; font-weight: 700; }
+  #infoWindowBody { padding: 0.6rem 0.85rem 0.8rem; overflow: auto; flex: 1; min-height: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text); }
+  #infoWindowBody h4 { margin: 0.7rem 0 0.2rem; font-size: 0.74rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  #infoWindowBody ul { margin: 0.2rem 0 0.2rem 1.1rem; padding: 0; }
+  #infoWindowBody .iw-badge { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid; font-size: 0.74rem; font-weight: 600; }
+  #infoWindowBody .iw-note { color: var(--text-dim); font-size: 0.74rem; margin-top: 0.7rem; }
 
   /* Small centered dialog (used for Cloud Sync settings, etc.) */
   .dialog-overlay {
@@ -513,6 +527,15 @@
   Αυτόματη ανανέωση κάθε 30 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
 </footer>
 
+<!-- Floating comment window (patterns / indicators) — draggable header, resizable corner -->
+<div id="infoWindow">
+  <div id="infoWindowHead">
+    <span id="infoWindowTitle"></span>
+    <button class="icon-btn" id="infoWindowClose" title="Κλείσιμο" style="font-size:1.1rem;">✕</button>
+  </div>
+  <div id="infoWindowBody"></div>
+</div>
+
 <!-- CHART MODAL -->
 <div class="modal-overlay" id="chartModal">
   <div class="modal-box">
@@ -629,8 +652,8 @@
       "></div>
     </div>
     <div id="subPanels" style="display:none; flex-shrink:0;">
-      <div id="rsiPanel" class="sub-panel" style="display:none;"><canvas id="rsiChart"></canvas></div>
-      <div id="macdPanel" class="sub-panel" style="display:none;"><canvas id="macdChart"></canvas></div>
+      <div id="rsiPanel" class="sub-panel" style="display:none;"><div class="sub-resize-handle" data-panel="rsi" title="Σύρε για αλλαγή μεγέθους (διπλό κλικ: επαναφορά)"></div><canvas id="rsiChart"></canvas></div>
+      <div id="macdPanel" class="sub-panel" style="display:none;"><div class="sub-resize-handle" data-panel="macd" title="Σύρε για αλλαγή μεγέθους (διπλό κλικ: επαναφορά)"></div><canvas id="macdChart"></canvas></div>
     </div>
     <div class="reg-stats" id="regStats"></div>
 
@@ -2885,7 +2908,7 @@ function detectCandlePatterns(candles) {
         }
       }
     }
-    if (hit) out.push({ i, len: hit.len, name: hit.name, dir: hit.dir });
+    if (hit) out.push({ i, len: hit.len, name: hit.name, dir: hit.dir, trend: trendBefore(i - hit.len + 1, avg) });
   }
   return out;
 }
@@ -2896,7 +2919,14 @@ const PATTERN_DIR_COLOR = { bull: "#3ddc97", bear: "#ff5c6c", neutral: "#9aa1ac"
 function drawPatternMarkers(chart, patterns, cursorX, cursorY, lineMode) {
   const { ctx, chartArea, scales } = chart;
   const { list, candles } = patterns;
-  let hover = null;
+  // Keep the tooltip alive while the cursor is over it (so it can be clicked)
+  const prevTip = chart.$patTip;
+  chart.$patTip = null;
+  let hover = null, sticky = false;
+  if (prevTip && cursorX !== null && cursorX !== undefined && cursorY !== null && cursorY !== undefined) {
+    const r = prevTip.rect;
+    if (cursorX >= r.x && cursorX <= r.x + r.w && cursorY >= r.y && cursorY <= r.y + r.h) { hover = prevTip.hover; sticky = true; }
+  }
   ctx.save();
   ctx.beginPath();
   ctx.rect(chartArea.left, chartArea.top - 12, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top + 24);
@@ -2929,7 +2959,7 @@ function drawPatternMarkers(chart, patterns, cursorX, cursorY, lineMode) {
     }
     if (cursorX !== null && cursorX !== undefined) {
       const dx = Math.abs(cursorX - x), dy = (cursorY === null || cursorY === undefined) ? 0 : Math.abs(cursorY - my);
-      if (dx <= 6 && dy <= 45 && (!hover || dx < hover.dx)) hover = { p, x, my, color, dx };
+      if (!sticky && dx <= 6 && dy <= 45 && (!hover || dx < hover.dx)) hover = { p, x, my, color, dx };
     }
   });
   ctx.restore();
@@ -2937,7 +2967,7 @@ function drawPatternMarkers(chart, patterns, cursorX, cursorY, lineMode) {
   if (hover) {
     ctx.save();
     ctx.font = "bold 11px sans-serif";
-    const text = hover.p.name;
+    const text = hover.p.name + "  ⓘ";
     const w = ctx.measureText(text).width + 12;
     const bx = Math.min(Math.max(chartArea.left, hover.x - w / 2), chartArea.right - w);
     const by = hover.p.dir === "bull" ? hover.my + 12 : hover.my - 30;
@@ -2949,6 +2979,8 @@ function drawPatternMarkers(chart, patterns, cursorX, cursorY, lineMode) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(text, bx + w / 2, by + 10);
     ctx.restore();
+    chart.$patTip = { rect: { x: bx, y: by, w, h: 20 }, hover };
+    if (sticky) chart.canvas.style.cursor = "pointer";
   }
 }
 
@@ -2967,6 +2999,301 @@ const splitPatternPlugin = {
   }
 };
 if (typeof Chart !== "undefined") { Chart.register(candlePatternPlugin); Chart.register(splitPatternPlugin); }
+
+/* ---------- Floating comment window ---------- */
+const INFO_SIZE_KEY = "crypto_tracker_infowin_size_v1";
+let infoDrag = null;
+function openInfoWindow(title, color, html, ax, ay) {
+  const w = document.getElementById("infoWindow");
+  if (!w) return;
+  const host = document.fullscreenElement || document.body;
+  if (w.parentElement !== host) host.appendChild(w);
+  const t = document.getElementById("infoWindowTitle");
+  t.textContent = title;
+  t.style.color = color || "var(--text)";
+  document.getElementById("infoWindowBody").innerHTML = html;
+  try {
+    const sz = JSON.parse(localStorage.getItem(INFO_SIZE_KEY) || "null");
+    if (sz && sz.w && sz.h) { w.style.width = sz.w + "px"; w.style.height = sz.h + "px"; }
+  } catch (e) {}
+  w.style.display = "flex";
+  const ww = w.offsetWidth, wh = w.offsetHeight;
+  w.style.left = Math.max(8, Math.min(ax + 14, window.innerWidth - ww - 8)) + "px";
+  w.style.top  = Math.max(8, Math.min(ay + 14, window.innerHeight - wh - 8)) + "px";
+  document.getElementById("infoWindowBody").scrollTop = 0;
+}
+function closeInfoWindow() {
+  const w = document.getElementById("infoWindow");
+  if (w) w.style.display = "none";
+}
+(function initInfoWindow() {
+  const w = document.getElementById("infoWindow");
+  document.getElementById("infoWindowClose").addEventListener("click", closeInfoWindow);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInfoWindow(); });
+  document.addEventListener("fullscreenchange", closeInfoWindow);
+  const head = document.getElementById("infoWindowHead");
+  head.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return;
+    const r = w.getBoundingClientRect();
+    infoDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!infoDrag) return;
+    w.style.left = Math.max(0, Math.min(e.clientX - infoDrag.dx, window.innerWidth - 60)) + "px";
+    w.style.top  = Math.max(0, Math.min(e.clientY - infoDrag.dy, window.innerHeight - 40)) + "px";
+  });
+  document.addEventListener("mouseup", () => { infoDrag = null; });
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => {
+      if (w.style.display === "none" || !w.offsetWidth) return;
+      try { localStorage.setItem(INFO_SIZE_KEY, JSON.stringify({ w: Math.round(w.offsetWidth), h: Math.round(w.offsetHeight) })); } catch (e) {}
+    }).observe(w);
+  }
+})();
+
+/* ---------- Pattern commentary ---------- */
+const PATTERN_INFO = {
+  "Doji": {
+    what: "Κερί όπου το άνοιγμα και το κλείσιμο σχεδόν ταυτίζονται, με σκιές πάνω και κάτω.",
+    why: "Οι αγοραστές και οι πωλητές ισοσκελίστηκαν. Δείχνει αναποφασιστικότητα· μετά από έντονη κίνηση μπορεί να προειδοποιεί ότι η τάση κουράζεται, αλλά χρειάζεται επιβεβαίωση από το επόμενο κερί."
+  },
+  "Doji Λιβελούλα (Dragonfly Doji)": {
+    what: "Doji με μακρύ κάτω σκίασμα και κλείσιμο κοντά στο υψηλό.",
+    why: "Οι πωλητές έριξαν την τιμή αρκετά, αλλά οι αγοραστές την επανέφεραν μέχρι το άνοιγμα. Μετά από πτώση μπορεί να δείχνει ότι βρέθηκε στήριξη· θέλει επιβεβαίωση με ανοδικό επόμενο κερί."
+  },
+  "Doji Ταφόπλακα (Gravestone Doji)": {
+    what: "Doji με μακρύ πάνω σκίασμα και κλείσιμο κοντά στο χαμηλό.",
+    why: "Οι αγοραστές ανέβασαν την τιμή, αλλά οι πωλητές την επανέφεραν. Μετά από άνοδο μπορεί να δείχνει απόρριψη των υψηλών (αντίσταση)· θέλει επιβεβαίωση με πτωτικό επόμενο κερί."
+  },
+  "Σφυρί (Hammer)": {
+    what: "Μικρό σώμα στο πάνω μέρος και μακρύ κάτω σκίασμα (τουλάχιστον 2 φορές το σώμα), μετά από πτώση.",
+    why: "Οι πωλητές πίεσαν έντονα, αλλά οι αγοραστές ανέκτησαν το έδαφος μέσα στο ίδιο κερί. Είναι ένδειξη πιθανής αντιστροφής προς τα πάνω — πιο αξιόπιστη όταν το επόμενο κερί κλείνει υψηλότερα."
+  },
+  "Κρεμασμένος (Hanging Man)": {
+    what: "Ίδιο σχήμα με το Σφυρί (μικρό σώμα, μακρύ κάτω σκίασμα) αλλά μετά από άνοδο.",
+    why: "Παρά την άνοδο, εμφανίστηκε ισχυρή πώληση μέσα στο κερί. Προειδοποιεί ότι οι αγοραστές χάνουν τον έλεγχο· θέλει επιβεβαίωση με πτωτικό επόμενο κερί."
+  },
+  "Ανεστραμμένο Σφυρί (Inverted Hammer)": {
+    what: "Μικρό σώμα στο κάτω μέρος και μακρύ πάνω σκίασμα, μετά από πτώση.",
+    why: "Οι αγοραστές δοκίμασαν να ανεβάσουν την τιμή. Αν και τα κατάφεραν μόνο προσωρινά, δείχνει ότι η πίεση των πωλητών αδυνατίζει. Πιθανή ανοδική αντιστροφή με επιβεβαίωση."
+  },
+  "Πεφταστέρι (Shooting Star)": {
+    what: "Μικρό σώμα στο κάτω μέρος και μακρύ πάνω σκίασμα, μετά από άνοδο.",
+    why: "Η τιμή έφτασε ψηλά αλλά απορρίφθηκε και έκλεισε κοντά στο άνοιγμα — οι πωλητές μπήκαν δυναμικά. Πιθανή πτωτική αντιστροφή, ιδίως αν το επόμενο κερί κλείσει χαμηλότερα."
+  },
+  "Marubozu ανοδικό": {
+    what: "Μεγάλο ανοδικό κερί σχεδόν χωρίς σκιές: άνοιγμα στο χαμηλό, κλείσιμο στο υψηλό.",
+    why: "Οι αγοραστές κυριάρχησαν σε όλη τη διάρκεια του κεριού. Δείχνει ισχυρή ανοδική ορμή και συχνά λειτουργεί ως συνέχιση της τάσης."
+  },
+  "Marubozu πτωτικό": {
+    what: "Μεγάλο πτωτικό κερί σχεδόν χωρίς σκιές: άνοιγμα στο υψηλό, κλείσιμο στο χαμηλό.",
+    why: "Οι πωλητές κυριάρχησαν σε όλη τη διάρκεια του κεριού. Δείχνει ισχυρή πτωτική ορμή και συχνά λειτουργεί ως συνέχιση της πτώσης."
+  },
+  "Ανοδική Κατάποση (Bullish Engulfing)": {
+    what: "Ανοδικό κερί με σώμα που καλύπτει ολόκληρο το σώμα του προηγούμενου πτωτικού κεριού, μετά από πτώση.",
+    why: "Οι αγοραστές αντιστρέφουν πλήρως την προηγούμενη πώληση. Είναι από τις πιο γνωστές ενδείξεις πιθανής ανοδικής αντιστροφής, ιδίως με αυξημένο όγκο."
+  },
+  "Πτωτική Κατάποση (Bearish Engulfing)": {
+    what: "Πτωτικό κερί με σώμα που καλύπτει ολόκληρο το σώμα του προηγούμενου ανοδικού κεριού, μετά από άνοδο.",
+    why: "Οι πωλητές αντιστρέφουν πλήρως την προηγούμενη αγορά. Ένδειξη πιθανής πτωτικής αντιστροφής, ιδίως με αυξημένο όγκο."
+  },
+  "Διαπεραστική Γραμμή (Piercing Line)": {
+    what: "Μετά από πτωτικό κερί, ανοδικό κερί που ανοίγει χαμηλά και κλείνει πάνω από το μέσο του προηγούμενου σώματος.",
+    why: "Οι αγοραστές ανέκτησαν πάνω από τη μισή πτώση του προηγούμενου κεριού. Πιθανή ανοδική αντιστροφή, λίγο ασθενέστερη από την Κατάποση."
+  },
+  "Σκοτεινό Σύννεφο (Dark Cloud Cover)": {
+    what: "Μετά από ανοδικό κερί, πτωτικό κερί που ανοίγει ψηλά και κλείνει κάτω από το μέσο του προηγούμενου σώματος.",
+    why: "Οι πωλητές εξαφάνισαν πάνω από τη μισή άνοδο του προηγούμενου κεριού. Πιθανή πτωτική αντιστροφή, λίγο ασθενέστερη από την Πτωτική Κατάποση."
+  },
+  "Ανοδικό Harami (Bullish Harami)": {
+    what: "Μικρό ανοδικό κερί που «χωράει» μέσα στο σώμα ενός μεγάλου πτωτικού κεριού, μετά από πτώση.",
+    why: "Η πτωτική ορμή ξαφνικά χάνει δύναμη (το νέο κερί δεν μπορεί να ξεπεράσει το προηγούμενο εύρος). Προειδοποίηση πιθανής αντιστροφής, αλλά πιο αδύναμη ένδειξη· θέλει επιβεβαίωση."
+  },
+  "Πτωτικό Harami (Bearish Harami)": {
+    what: "Μικρό πτωτικό κερί που «χωράει» μέσα στο σώμα ενός μεγάλου ανοδικού κεριού, μετά από άνοδο.",
+    why: "Η ανοδική ορμή χάνει δύναμη. Προειδοποίηση πιθανής αντιστροφής, αλλά πιο αδύναμη ένδειξη· θέλει επιβεβαίωση."
+  },
+  "Τσιμπίδα Πυθμένα (Tweezer Bottom)": {
+    what: "Δύο διαδοχικά κεριά (πτωτικό και μετά ανοδικό) με σχεδόν ίδιο χαμηλό, μετά από πτώση.",
+    why: "Η τιμή δοκίμασε δύο φορές το ίδιο επίπεδο και δεν το έσπασε — ένδειξη πιθανής στήριξης. Ισχύει περισσότερο αν το επίπεδο είναι και σημαντικό (π.χ. pivot ή προηγούμενο χαμηλό)."
+  },
+  "Τσιμπίδα Κορυφής (Tweezer Top)": {
+    what: "Δύο διαδοχικά κεριά (ανοδικό και μετά πτωτικό) με σχεδόν ίδιο υψηλό, μετά από άνοδο.",
+    why: "Η τιμή δοκίμασε δύο φορές το ίδιο επίπεδο και απορρίφθηκε — ένδειξη πιθανής αντίστασης. Ισχύει περισσότερο αν το επίπεδο είναι σημαντικό."
+  },
+  "Αστέρι της Αυγής (Morning Star)": {
+    what: "Τρία κεριά: μεγάλο πτωτικό, μικρό κερί αναποφασιστικότητας, και μεγάλο ανοδικό που κλείνει πάνω από το μέσο του πρώτου.",
+    why: "Η πώληση εξαντλείται (μικρό κερί) και οι αγοραστές αναλαμβάνουν (τρίτο κερί). Θεωρείται αρκετά αξιόπιστη ανοδική αντιστροφή μετά από πτώση."
+  },
+  "Αστέρι του Δειλινού (Evening Star)": {
+    what: "Τρία κεριά: μεγάλο ανοδικό, μικρό κερί αναποφασιστικότητας, και μεγάλο πτωτικό που κλείνει κάτω από το μέσο του πρώτου.",
+    why: "Η αγορά εξαντλείται (μικρό κερί) και οι πωλητές αναλαμβάνουν (τρίτο κερί). Θεωρείται αρκετά αξιόπιστη πτωτική αντιστροφή μετά από άνοδο."
+  },
+  "Τρεις Λευκοί Στρατιώτες (Three White Soldiers)": {
+    what: "Τρία διαδοχικά ανοδικά κεριά με μεγάλα σώματα, μικρές πάνω σκιές και όλο και υψηλότερα κλεισίματα.",
+    why: "Σταθερή και συντονισμένη αγοραστική πίεση σε τρία κεριά. Δείχνει ισχυρή ανοδική ορμή, συχνά στην αρχή νέας ανοδικής κίνησης. Μετά από ήδη μεγάλη άνοδο μπορεί να σημαίνει και εξάντληση."
+  },
+  "Τρία Μαύρα Κοράκια (Three Black Crows)": {
+    what: "Τρία διαδοχικά πτωτικά κεριά με μεγάλα σώματα, μικρές κάτω σκιές και όλο και χαμηλότερα κλεισίματα.",
+    why: "Σταθερή και συντονισμένη πωλητική πίεση σε τρία κεριά. Δείχνει ισχυρή πτωτική ορμή, συχνά στην αρχή νέας πτώσης. Μετά από ήδη μεγάλη πτώση μπορεί να σημαίνει και εξάντληση."
+  }
+};
+
+function openPatternInfo(p, candles, ax, ay, coinId) {
+  const info = PATTERN_INFO[p.name] || { what: "", why: "" };
+  const c = candles[p.i], first = candles[p.i - p.len + 1];
+  const cid = coinId || currentModalCoinId;
+  const col = PATTERN_DIR_COLOR[p.dir];
+  const fmtT = (ts) => new Date(ts).toLocaleString("el-GR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const dirTxt = p.dir === "bull" ? "Ανοδικό σήμα" : p.dir === "bear" ? "Πτωτικό σήμα" : "Ουδέτερο / αναποφασιστικότητα";
+  const trendTxt = p.trend > 0 ? "ανοδική" : p.trend < 0 ? "πτωτική" : "πλάγια ή ασαφής";
+  const sym = currencySymbol();
+  const f = (v) => sym + formatNumber(v, cid);
+  const html = `
+    <div><span class="iw-badge" style="color:${col};border-color:${col};">${dirTxt}</span></div>
+    <h4>Πού</h4>
+    <div>${p.len > 1 ? fmtT(first[0]) + " → " : ""}${fmtT(c[0])} (${p.len} ${p.len === 1 ? "κερί" : "κεριά"})<br>
+      <span style="color:var(--text-dim);">O ${f(c[1])} · H ${f(c[2])} · L ${f(c[3])} · C ${f(c[4])}</span></div>
+    <h4>Τι δείχνει</h4><div>${info.what}</div>
+    <h4>Γιατί έχει σημασία</h4><div>${info.why}</div>
+    <h4>Πλαίσιο</h4><div>Η τάση πριν τον σχηματισμό ήταν <b>${trendTxt}</b>${p.dir !== "neutral" && ((p.dir === "bull" && p.trend < 0) || (p.dir === "bear" && p.trend > 0)) ? " — συμβατή με αντιστροφή." : "."}</div>
+    <div class="iw-note">Ενδεικτικό σήμα από απλούς γεωμετρικούς κανόνες, όχι επενδυτική συμβουλή. Έλεγξε επιβεβαίωση από το επόμενο κερί, τον όγκο και τα κοντινά επίπεδα (pivot, μέσους όρους).</div>`;
+  openInfoWindow(p.name.split(" (")[0], col, html, ax, ay);
+}
+
+function patternTipHit(evt, chart) {
+  const tip = chart && chart.$patTip;
+  if (!tip) return null;
+  const r = chart.canvas.getBoundingClientRect();
+  const x = evt.clientX - r.left, y = evt.clientY - r.top, t = tip.rect;
+  return (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) ? tip : null;
+}
+// Registered before the chart's own click/mousedown handlers so a click on the tooltip
+// doesn't start a pan/selection or place a drawing point underneath it.
+bigChartCanvas.addEventListener("mousedown", (e) => { if (patternTipHit(e, bigChart)) e.stopImmediatePropagation(); }, true);
+bigChartCanvas.addEventListener("click", (e) => {
+  const tip = patternTipHit(e, bigChart);
+  if (tip && currentPatterns) {
+    e.stopImmediatePropagation(); e.preventDefault();
+    openPatternInfo(tip.hover.p, currentPatterns.candles, e.clientX, e.clientY);
+  }
+}, true);
+
+/* ---------- Indicator commentary (RSI / MACD) ---------- */
+function lastValid(arr) { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] !== null && arr[i] !== undefined) return i; return -1; }
+
+function openIndicatorInfo(kind, ax, ay) {
+  const sc = subCharts[kind];
+  if (!sc || !sc.$ind) return;
+  const d = sc.$ind;
+  const fmtT = (ts) => new Date(ts).toLocaleString("el-GR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const up = (t) => `<span style="color:#3ddc97">${t}</span>`, dn = (t) => `<span style="color:#ff5c6c">${t}</span>`;
+  let title, html;
+
+  if (kind === "rsi") {
+    title = "RSI (14) — Relative Strength Index";
+    const r = d.rsi, i = lastValid(r), v = r[i];
+    const pts = [];
+    const zone = v >= 70 ? dn("Υπεραγορά (≥ 70)") : v <= 30 ? up("Υπερπώληση (≤ 30)") : v > 50 ? "Ουδέτερη ζώνη, πάνω από το 50 (ελαφρά ανοδική ορμή)" : "Ουδέτερη ζώνη, κάτω από το 50 (ελαφρά πτωτική ορμή)";
+    pts.push(`Τιμή <b>${v.toFixed(1)}</b> — ${zone}.`);
+    const back = r[i - 3];
+    if (back !== null && back !== undefined) {
+      const diff = v - back;
+      pts.push(`Τα τελευταία 3 κεριά ο δείκτης ${Math.abs(diff) < 2 ? "κινείται πλάγια" : diff > 0 ? up("ανεβαίνει (" + diff.toFixed(1) + ")") : dn("πέφτει (" + diff.toFixed(1) + ")")}.`);
+    }
+    // most recent crossing of the 70 / 30 lines (last 40 candles)
+    for (let k = i; k > Math.max(1, i - 40); k--) {
+      const a = r[k - 1], b = r[k];
+      if (a === null || b === null) break;
+      let ev = null;
+      if (a < 70 && b >= 70) ev = "ανέβηκε πάνω από το 70 (είσοδος σε υπεραγορά)";
+      else if (a >= 70 && b < 70) ev = dn("κατέβηκε κάτω από το 70 (έξοδος από υπεραγορά — πιθανό πτωτικό σήμα)");
+      else if (a > 30 && b <= 30) ev = "κατέβηκε κάτω από το 30 (είσοδος σε υπερπώληση)";
+      else if (a <= 30 && b > 30) ev = up("ανέβηκε πάνω από το 30 (έξοδος από υπερπώληση — πιθανό ανοδικό σήμα)");
+      if (ev) { pts.push(`Πιο πρόσφατη διέλευση: ο δείκτης ${ev}, πριν από ${i - k} κεριά.`); break; }
+    }
+    // simple divergence over the last two 14-candle windows
+    const n = d.closes.length;
+    if (n > 40) {
+      const win = (from, to, fn) => { let bi = from; for (let k = from; k < to; k++) if (fn(d.closes[k], d.closes[bi])) bi = k; return bi; };
+      const l1 = win(n - 14, n, (a, b) => a < b), l2 = win(n - 28, n - 14, (a, b) => a < b);
+      const h1 = win(n - 14, n, (a, b) => a > b), h2 = win(n - 28, n - 14, (a, b) => a > b);
+      if (r[l1] !== null && r[l2] !== null && d.closes[l1] < d.closes[l2] && r[l1] > r[l2] + 2)
+        pts.push(up("Πιθανή ανοδική απόκλιση:") + " η τιμή έκανε χαμηλότερο χαμηλό ενώ ο RSI υψηλότερο — η πτώση χάνει ορμή.");
+      if (r[h1] !== null && r[h2] !== null && d.closes[h1] > d.closes[h2] && r[h1] < r[h2] - 2)
+        pts.push(dn("Πιθανή πτωτική απόκλιση:") + " η τιμή έκανε υψηλότερο υψηλό ενώ ο RSI χαμηλότερο — η άνοδος χάνει ορμή.");
+    }
+    html = `
+      <h4>Τι δείχνει</h4>
+      <div>Ο RSI (0–100) μετρά την ταχύτητα και το μέγεθος των πρόσφατων μεταβολών της τιμής (περίοδος 14, εξομάλυνση Wilder). Πάνω από 70 θεωρείται υπεραγορά, κάτω από 30 υπερπώληση.</div>
+      <h4>Γιατί έχει σημασία</h4>
+      <div>Βοηθά να εντοπίσεις πιθανή εξάντληση μιας κίνησης και αποκλίσεις μεταξύ τιμής και ορμής. Σε ισχυρές τάσεις ο δείκτης μπορεί να μένει σε υπεραγορά ή υπερπώληση για πολύ, οπότε δεν αποτελεί από μόνος του σήμα αγοράς ή πώλησης.</div>
+      <h4>Τρέχουσα εικόνα (${fmtT(d.xs[i])})</h4>
+      <ul>${pts.map(t => `<li>${t}</li>`).join("")}</ul>
+      <div class="iw-note">Ενδεικτική ανάγνωση, όχι επενδυτική συμβουλή.</div>`;
+  } else {
+    title = "MACD (12, 26, 9)";
+    const m = d.m, i = lastValid(m.hist);
+    const mv = m.macd[i], sv = m.signal[i], hv = m.hist[i];
+    const dec = Math.abs(mv) < 1 ? 5 : Math.abs(mv) < 100 ? 3 : 2;
+    const pts = [];
+    pts.push(`MACD <b>${mv.toFixed(dec)}</b> ${mv > sv ? "πάνω" : "κάτω"} από τη γραμμή σήματος <b>${sv.toFixed(dec)}</b> — ${mv > sv ? up("ανοδική ορμή") : dn("πτωτική ορμή")}.`);
+    pts.push(`Η γραμμή MACD είναι ${mv > 0 ? up("πάνω") : dn("κάτω")} από το μηδέν — ο γρήγορος μέσος (EMA 12) βρίσκεται ${mv > 0 ? "πάνω" : "κάτω"} από τον αργό (EMA 26).`);
+    const hp = m.hist[i - 1];
+    if (hp !== null && hp !== undefined) {
+      const expanding = Math.abs(hv) > Math.abs(hp);
+      pts.push(`Το ιστόγραμμα (${hv >= 0 ? up("θετικό") : dn("αρνητικό")}) ${expanding ? "μεγαλώνει — η ορμή ενισχύεται" : "μικραίνει — η ορμή εξασθενεί"}.`);
+    }
+    for (let k = i; k > Math.max(1, i - 40); k--) {
+      const a = m.hist[k - 1], b = m.hist[k];
+      if (a === null || b === null) break;
+      if (a <= 0 && b > 0) { pts.push(`Πιο πρόσφατη διασταύρωση: ${up("ανοδική")} (MACD πάνω από το σήμα), πριν από ${i - k} κεριά (${fmtT(d.xs[k])}).`); break; }
+      if (a >= 0 && b < 0) { pts.push(`Πιο πρόσφατη διασταύρωση: ${dn("πτωτική")} (MACD κάτω από το σήμα), πριν από ${i - k} κεριά (${fmtT(d.xs[k])}).`); break; }
+    }
+    html = `
+      <h4>Τι δείχνει</h4>
+      <div>Η γραμμή MACD είναι η διαφορά EMA 12 − EMA 26. Η γραμμή σήματος είναι ο EMA 9 της MACD και το ιστόγραμμα η διαφορά MACD − σήμα (πράσινο όταν είναι θετική, κόκκινο όταν αρνητική).</div>
+      <h4>Γιατί έχει σημασία</h4>
+      <div>Δείχνει αλλαγές στην ορμή και την κατεύθυνση της τάσης. Διασταύρωση της MACD πάνω από το σήμα θεωρείται ανοδικό σήμα, κάτω από το σήμα πτωτικό· διέλευση του μηδενός επιβεβαιώνει την αλλαγή τάσης. Σε πλάγιες αγορές δίνει συχνά ψευδή σήματα.</div>
+      <h4>Τρέχουσα εικόνα (${fmtT(d.xs[i])})</h4>
+      <ul>${pts.map(t => `<li>${t}</li>`).join("")}</ul>
+      <div class="iw-note">Ενδεικτική ανάγνωση, όχι επενδυτική συμβουλή.</div>`;
+  }
+  openInfoWindow(title, "#38bdf8", html, ax, ay);
+}
+
+// Panel click → commentary. Panel resize handle → drag to change height (saved), double-click to reset.
+const SUBH_KEY = "crypto_tracker_subpanel_h_v1";
+const SUBH_DEFAULT = 110;
+let subHeights = { rsi: SUBH_DEFAULT, macd: SUBH_DEFAULT };
+try { Object.assign(subHeights, JSON.parse(localStorage.getItem(SUBH_KEY) || "{}")); } catch (e) {}
+function saveSubHeights() { try { localStorage.setItem(SUBH_KEY, JSON.stringify(subHeights)); } catch (e) {} }
+function applySubHeights() {
+  ["rsi", "macd"].forEach(k => { const el = document.getElementById(k + "Panel"); if (el) el.style.height = subHeights[k] + "px"; });
+}
+(function initSubPanelUi() {
+  ["rsi", "macd"].forEach(kind => {
+    const panel = document.getElementById(kind + "Panel");
+    panel.addEventListener("click", (e) => openIndicatorInfo(kind, e.clientX, e.clientY));
+  });
+  document.querySelectorAll(".sub-resize-handle").forEach(h => {
+    const kind = h.dataset.panel, panel = document.getElementById(kind + "Panel");
+    h.addEventListener("click", (e) => e.stopPropagation());
+    h.addEventListener("dblclick", (e) => { e.stopPropagation(); subHeights[kind] = SUBH_DEFAULT; applySubHeights(); saveSubHeights(); });
+    h.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const sy = e.clientY, sh = panel.offsetHeight;
+      const maxH = Math.max(120, Math.round(window.innerHeight * 0.4));
+      const mv = (ev) => {
+        const nh = Math.max(60, Math.min(maxH, sh + (sy - ev.clientY)));
+        subHeights[kind] = nh; panel.style.height = nh + "px";
+      };
+      const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); saveSubHeights(); };
+      document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+    });
+  });
+})();
 
 /* -- RSI / MACD sub-panels: separate canvases whose x-range is kept in sync with the main chart -- */
 let subCharts = { rsi: null, macd: null };
@@ -3057,6 +3384,7 @@ function buildSubCharts(candles) {
   const lastOf = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] !== null) return arr[i]; return null; };
   const wrap = document.getElementById("subPanels");
   wrap.style.display = "block";
+  applySubHeights();
 
   if (ind.rsi) {
     document.getElementById("rsiPanel").style.display = "block";
@@ -3064,11 +3392,12 @@ function buildSubCharts(candles) {
     subCharts.rsi = makeSubChart("rsiChart", "rsi", [{
       label: "RSI", type: "line", data: pts(rsi), borderColor: "#a78bfa", borderWidth: 1.4,
       pointRadius: 0, fill: false
-    }], `RSI (14)  ${fmt(lastOf(rsi))}`, {
+    }], `RSI (14)  ${fmt(lastOf(rsi))}    ⓘ κλικ για σχόλιο`, {
       min: 0, max: 100,
       afterBuildTicks: (scale) => { scale.ticks = [0, 30, 50, 70, 100].map(v => ({ value: v })); },
       ticks: { color: "#9aa1ac" }
     });
+    subCharts.rsi.$ind = { rsi, closes, xs };
   }
   if (ind.macd) {
     document.getElementById("macdPanel").style.display = "block";
@@ -3083,9 +3412,10 @@ function buildSubCharts(candles) {
       },
       { label: "MACD", type: "line", data: pts(m.macd), borderColor: "#4f8cff", borderWidth: 1.3, pointRadius: 0, fill: false },
       { label: "Signal", type: "line", data: pts(m.signal), borderColor: "#f59e0b", borderWidth: 1.3, pointRadius: 0, fill: false }
-    ], `MACD (12,26,9)  ${fmt(lastOf(m.macd), dec)} / ${fmt(lastOf(m.signal), dec)}`, {
+    ], `MACD (12,26,9)  ${fmt(lastOf(m.macd), dec)} / ${fmt(lastOf(m.signal), dec)}    ⓘ κλικ για σχόλιο`, {
       ticks: { color: "#9aa1ac", maxTicksLimit: 4, callback: (v) => { const a = Math.abs(v); return a >= 1000 ? (v / 1000).toFixed(1) + "k" : a >= 10 ? v.toFixed(0) : a >= 1 ? v.toFixed(1) : v.toPrecision(2); } }
     });
+    subCharts.macd.$ind = { m, closes, xs };
   }
   syncSubCharts();
 }
@@ -3447,6 +3777,14 @@ function populateSplitSelects() {
   });
 }
 
+["splitChartA", "splitChartB"].forEach(id => {
+  document.getElementById(id).addEventListener("click", (e) => {
+    const ch = id === "splitChartA" ? splitChartA : splitChartB;
+    const tip = patternTipHit(e, ch);
+    if (tip && ch.$patterns) openPatternInfo(tip.hover.p, ch.$patterns.candles, e.clientX, e.clientY, ch.$coinId);
+  });
+});
+
 function syncSplitPatternControls() {
   const btn = document.getElementById("splitPatternBtn"), sel = document.getElementById("splitSensSelect");
   if (btn) btn.style.opacity = ind.patterns ? "1" : "0.45";
@@ -3472,6 +3810,7 @@ document.getElementById("splitViewBtn").addEventListener("click", () => {
   loadSplitCharts();
 });
 document.getElementById("closeSplitViewBtn").addEventListener("click", () => {
+  closeInfoWindow();
   if (document.fullscreenElement) document.exitFullscreen();
   document.getElementById("splitViewModal").classList.remove("open");
 });
@@ -5606,6 +5945,7 @@ function closeChartModal() {
   }
   document.getElementById("modalOhlcTicker").textContent = "";
   destroySubCharts();
+  closeInfoWindow();
   currentPatterns = null; currentPivotSegs = null;
   analysisCustomRange = null;
   analysisDragState = null;

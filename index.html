@@ -595,7 +595,7 @@
       <button id="modalRefreshBtn" style="border-color:#22c55e;color:#22c55e;">↻</button>
       <button id="autoRefreshBtn" title="Αυτόματη ανανέωση" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
       <button id="bookmarkBtn" title="Flag στο διάγραμμα" style="border-color:#6b7280;color:#9aa1ac;">🔖 Flag</button>
-      <button id="resetZoomBtn" style="border-color:#6b7280;color:#9aa1ac;">⤢</button>
+      <button id="resetZoomBtn" title="Επαναφορά zoom (πλήρης προβολή του γραφήματος)" style="border-color:#6b7280;color:#9aa1ac;">🔍↺</button>
       <button id="snapshotBtn" style="border-color:#6b7280;color:#9aa1ac;">📸</button>
       <button id="orderBookBtn">📶 Βιβλίο</button>
       <button id="analyzeBtn">🤖 Ανάλυση</button>
@@ -2579,7 +2579,8 @@ const IND_DEFS = [
   { id: "macd",   label: "MACD (12, 26, 9)" },
   { id: "pivots", label: "Pivot Points" },
   { id: "patterns", label: "Σχηματισμοί candlesticks" },
-  { id: "_sens",  label: "" }
+  { id: "_sens",  label: "" },
+  { id: "_suggest", label: "" }
 ];
 let ind = {};
 (function loadInd() {
@@ -2599,6 +2600,8 @@ function refreshIndicatorMenu() {
   sel.innerHTML = `<option value="" style="background:#1a1f2e;color:#38bdf8;">📊 Δείκτες${count ? " (" + count + ")" : ""}</option>` +
     IND_DEFS.map(d => d.id === "_sens"
       ? `<option value="_sens" style="background:#1a1f2e;color:#38bdf8;">⚙ Ευαισθησία σχηματισμών: ${SENS_LABEL[ind.sens]} (κλικ για αλλαγή)</option>`
+      : d.id === "_suggest"
+      ? `<option value="_suggest" style="background:#1a1f2e;color:#fbbf24;">🔎 Πρόταση: ποιος δείκτης/Μ.Ο. ταιριάζει καλύτερα;</option>`
       : `<option value="${d.id}" style="background:#1a1f2e;color:#38bdf8;">${ind[d.id] ? "✔" : "◻"} ${d.label}</option>`
     ).join("");
   sel.selectedIndex = 0;
@@ -2606,6 +2609,7 @@ function refreshIndicatorMenu() {
 document.getElementById("indicatorSelect").addEventListener("change", (e) => {
   const id = e.target.value;
   if (!id) return;
+  if (id === "_suggest") { refreshIndicatorMenu(); openSuggestion(); return; }
   if (id === "_sens") cycleSensitivity(); else ind[id] = !ind[id];
   saveInd();
   refreshIndicatorMenu();
@@ -3003,9 +3007,11 @@ if (typeof Chart !== "undefined") { Chart.register(candlePatternPlugin); Chart.r
 /* ---------- Floating comment window ---------- */
 const INFO_SIZE_KEY = "crypto_tracker_infowin_size_v1";
 let infoDrag = null;
+let suggestOpen = false;
 function openInfoWindow(title, color, html, ax, ay) {
   const w = document.getElementById("infoWindow");
   if (!w) return;
+  suggestOpen = false;
   const host = document.fullscreenElement || document.body;
   if (w.parentElement !== host) host.appendChild(w);
   const t = document.getElementById("infoWindowTitle");
@@ -3023,6 +3029,7 @@ function openInfoWindow(title, color, html, ax, ay) {
   document.getElementById("infoWindowBody").scrollTop = 0;
 }
 function closeInfoWindow() {
+  suggestOpen = false;
   const w = document.getElementById("infoWindow");
   if (w) w.style.display = "none";
 }
@@ -3051,6 +3058,215 @@ function closeInfoWindow() {
     }).observe(w);
   }
 })();
+
+/* ---------- Πρόταση: ποιος δείκτης / Μ.Ο. ταιριάζει καλύτερα στο τρέχον διάστημα ---------- */
+const SUG_MAS = [
+  { id: "sma20", kind: "SMA", p: 20 }, { id: "sma50", kind: "SMA", p: 50 }, { id: "sma200", kind: "SMA", p: 200 },
+  { id: "ema20", kind: "EMA", p: 20 }, { id: "ema50", kind: "EMA", p: 50 }
+];
+const SUG_H = 6; // ορίζοντας αξιολόγησης σημάτων (κεριά)
+
+function sugATR(candles) {
+  const tr = candles.map((c, i) => i === 0 ? c[2] - c[3] : Math.max(c[2] - c[3], Math.abs(c[2] - candles[i - 1][4]), Math.abs(c[3] - candles[i - 1][4])));
+  return tr;
+}
+function sugADX(candles, p = 14) {
+  const n = candles.length;
+  if (n < p * 2 + 2) return null;
+  const tr = sugATR(candles);
+  const pdm = [0], mdm = [0];
+  for (let i = 1; i < n; i++) {
+    const up = candles[i][2] - candles[i - 1][2], dn = candles[i - 1][3] - candles[i][3];
+    pdm.push(up > dn && up > 0 ? up : 0); mdm.push(dn > up && dn > 0 ? dn : 0);
+  }
+  let str = 0, sp = 0, sm = 0;
+  for (let i = 1; i <= p; i++) { str += tr[i]; sp += pdm[i]; sm += mdm[i]; }
+  const dxs = [];
+  for (let i = p; i < n; i++) {
+    if (i > p) { str = str - str / p + tr[i]; sp = sp - sp / p + pdm[i]; sm = sm - sm / p + mdm[i]; }
+    const pdi = 100 * sp / str, mdi = 100 * sm / str;
+    dxs.push(pdi + mdi === 0 ? 0 : 100 * Math.abs(pdi - mdi) / (pdi + mdi));
+  }
+  if (dxs.length < p) return null;
+  let adx = dxs.slice(0, p).reduce((a, b) => a + b, 0) / p;
+  for (let i = p; i < dxs.length; i++) adx = (adx * (p - 1) + dxs[i]) / p;
+  return adx;
+}
+
+function sugScoreMA(candles, closes, atr, ma) {
+  const vals = ma.kind === "SMA" ? smaSeries(closes, ma.p) : emaSeries(closes, ma.p);
+  const start = ma.p - 1;
+  const n = closes.length;
+  if (n - start < 40) return { ...ma, na: true };
+  const meanATR = atr.slice(start).reduce((a, b) => a + b, 0) / (n - start);
+  let distSum = 0, cnt = 0;
+  const side = [];
+  for (let i = start; i < n; i++) {
+    distSum += Math.abs(closes[i] - vals[i]); cnt++;
+    side.push(closes[i] >= vals[i] ? 1 : -1);
+  }
+  const dist = distSum / cnt / (meanATR || 1);
+  let crossings = 0, falseCross = 0, lastCross = -99;
+  for (let k = 1; k < side.length; k++) {
+    if (side[k] !== side[k - 1]) {
+      crossings++;
+      if (k - lastCross <= 3) falseCross++;
+      lastCross = k;
+    }
+  }
+  // επαφές: το κερί «αγγίζει» τον μέσο· αναπήδηση αν οι επόμενοι 3 κλείνουν στην ίδια πλευρά με πριν
+  let touches = 0, bounces = 0;
+  for (let i = start + 1; i < n - 3; i++) {
+    const c = candles[i];
+    if (c[3] <= vals[i] && c[2] >= vals[i]) {
+      touches++;
+      const before = closes[i - 1] >= vals[i - 1] ? 1 : -1;
+      let ok = true;
+      for (let j = 1; j <= 3; j++) if ((closes[i + j] >= vals[i + j] ? 1 : -1) !== before) { ok = false; break; }
+      if (ok) bounces++;
+    }
+  }
+  const tS = 1 / (1 + dist);
+  const cS = crossings ? 1 - falseCross / crossings : 1;
+  const bS = touches >= 3 ? bounces / touches : 0.5;
+  const score = 100 * (0.4 * tS + 0.35 * cS + 0.25 * bS);
+  return { ...ma, na: false, score, dist, crossings, falseCross, touches, bounces, cur: vals[n - 1] };
+}
+
+function sugBacktest(label, id, signals, closes, H) {
+  // signals: [{i, dir:1|-1}] — «επιτυχία» = η τιμή κινείται προς την κατεύθυνση του σήματος μετά από H κεριά
+  const n = closes.length;
+  let up = 0, tot = 0;
+  for (let i = 0; i + H < n; i++) { tot++; if (closes[i + H] > closes[i]) up++; }
+  const baseUp = tot ? up / tot : 0.5;
+  let hits = 0, m = 0, exp = 0;
+  const lastAt = { 1: -999, "-1": -999 };
+  signals.forEach(sg => {
+    if (sg.i + H >= n) return;
+    if (sg.i - lastAt[sg.dir] < H) return; // ίδιο γεγονός: μετράει μία φορά ανά H κεριά
+    lastAt[sg.dir] = sg.i;
+    m++;
+    const ok = sg.dir > 0 ? closes[sg.i + H] > closes[sg.i] : closes[sg.i + H] < closes[sg.i];
+    if (ok) hits++;
+    exp += sg.dir > 0 ? baseUp : 1 - baseUp;
+  });
+  if (m < 4) return { label, id, n: m, na: true };
+  const rate = hits / m, expected = exp / m;
+  const adjRate = (hits + 2) / (m + 4), adjExp = (exp + 2 * 0.5) / (m + 4);
+  return { label, id, n: m, hits, rate, expected, edge: adjRate - adjExp, na: false };
+}
+
+function sugAnalyze(candles) {
+  const closes = candles.map(c => c[4]);
+  const n = closes.length;
+  if (n < 60) return { tooFew: true, n };
+  const atr = sugATR(candles);
+  // Τύπος αγοράς
+  let path = 0;
+  for (let i = 1; i < n; i++) path += Math.abs(closes[i] - closes[i - 1]);
+  const er = path ? Math.abs(closes[n - 1] - closes[0]) / path : 0;
+  const adx = sugADX(candles);
+  const trendVotes = (er >= 0.25 ? 1 : 0) + (adx !== null && adx >= 25 ? 1 : 0);
+  const regime = trendVotes === 2 ? "trend" : (er < 0.15 && (adx === null || adx < 25)) || (adx !== null && adx < 20 && er < 0.25) ? "range" : "mixed";
+  const dirUp = closes[n - 1] >= closes[0];
+
+  const mas = SUG_MAS.map(m => sugScoreMA(candles, closes, atr, m));
+  const maRank = mas.filter(m => !m.na).sort((a, b) => b.score - a.score);
+
+  // Δείκτες: ιστορικό τεστ των κλασικών κανόνων
+  const rsi = rsiSeries(closes), mc = macdSeries(closes), bb = computeBollinger(candles);
+  const sRsi = [], sMacd = [], sBB = [], sPat = [];
+  for (let i = 1; i < n; i++) {
+    if (rsi[i] !== null && rsi[i - 1] !== null) {
+      if (rsi[i - 1] < 30 && rsi[i] >= 30) sRsi.push({ i, dir: 1 });
+      if (rsi[i - 1] > 70 && rsi[i] <= 70) sRsi.push({ i, dir: -1 });
+    }
+    if (mc.hist[i] !== null && mc.hist[i - 1] !== null) {
+      if (mc.hist[i - 1] <= 0 && mc.hist[i] > 0) sMacd.push({ i, dir: 1 });
+      if (mc.hist[i - 1] >= 0 && mc.hist[i] < 0) sMacd.push({ i, dir: -1 });
+    }
+  }
+  bb.forEach((b, k) => {
+    const i = k + BB_PERIOD - 1;
+    if (closes[i] < b.lo) sBB.push({ i, dir: 1 });
+    else if (closes[i] > b.up) sBB.push({ i, dir: -1 });
+  });
+  try { detectCandlePatterns(candles).forEach(p => { if (p.dir !== "neutral") sPat.push({ i: p.i, dir: p.dir === "bull" ? 1 : -1 }); }); } catch (e) {}
+  const bonus = { trend: { macd: 0.03, rsi: 0, bb: 0, patterns: 0 }, range: { macd: 0, rsi: 0.03, bb: 0.03, patterns: 0 }, mixed: { macd: 0, rsi: 0, bb: 0, patterns: 0 } }[regime];
+  const inds = [
+    sugBacktest("RSI (14) — έξοδος από 30/70", "rsi", sRsi, closes, SUG_H),
+    sugBacktest("MACD — διασταύρωση σήματος", "macd", sMacd, closes, SUG_H),
+    sugBacktest("Bollinger — κλείσιμο εκτός ζωνών (επιστροφή στον μέσο)", "bb", sBB, closes, SUG_H),
+    sugBacktest("Σχηματισμοί candlesticks", "patterns", sPat, closes, SUG_H)
+  ];
+  inds.forEach(r => { if (!r.na) r.rank = r.edge + (bonus[r.id] || 0); });
+  const indRank = inds.filter(r => !r.na).sort((a, b) => b.rank - a.rank);
+  const picks = indRank.filter(r => r.edge > 0).slice(0, 2);
+  return { n, er, adx, regime, dirUp, mas, maRank, inds, indRank, picks, bestMA: maRank[0] || null };
+}
+
+function sugHtml(r) {
+  const pc = (v) => (v * 100).toFixed(0) + "%";
+  if (r.tooFew) return `<div>Χρειάζονται τουλάχιστον 60 κεριά για αξιόπιστη ανάλυση (τώρα: ${r.n}). Διάλεξε μεγαλύτερο χρονικό διάστημα.</div>`;
+  const regTxt = { trend: `<b style="color:#3ddc97">Τάση</b> (${r.dirUp ? "ανοδική" : "πτωτική"})`, range: `<b style="color:#fbbf24">Πλάγια κίνηση</b>`, mixed: `<b style="color:#38bdf8">Μεικτή</b> (ασαφής τάση)` }[r.regime];
+  const regHint = { trend: "Σε τάση ταιριάζουν συνήθως καλύτερα οι κινητοί μέσοι και το MACD.", range: "Σε πλάγια κίνηση ταιριάζουν συνήθως καλύτερα ο RSI και οι Bollinger.", mixed: "Δεν υπάρχει καθαρή τάση ή εύρος· δες πρώτα τα αριθμητικά αποτελέσματα." }[r.regime];
+  const rel = r.n >= 200 ? "καλή" : r.n >= 120 ? "μέτρια" : "χαμηλή";
+  let h = `<div>Ανάλυση σε <b>${r.n}</b> κεριά του τρέχοντος διαστήματος · αξιοπιστία δείγματος: <b>${rel}</b>.</div>
+    <h4>Τύπος αγοράς</h4>
+    <div>${regTxt} — Efficiency Ratio ${r.er.toFixed(2)}${r.adx !== null ? ", ADX " + r.adx.toFixed(0) : ""}.<br><span style="color:var(--text-dim)">${regHint}</span></div>
+    <h4>Μέσοι όροι (βαθμολογία 0–100)</h4>`;
+  if (!r.maRank.length) h += `<div>Δεν υπάρχουν αρκετά κεριά για κανέναν μέσο.</div>`;
+  else {
+    h += `<ul>` + r.maRank.map((m, k) => `<li>${k === 0 ? "🏆 " : ""}<b>${m.kind} ${m.p}</b>: ${m.score.toFixed(0)} <span style="color:var(--text-dim)">· απόσταση ${m.dist.toFixed(1)} ATR, ${m.crossings} διασταυρώσεις (${m.falseCross} ψευδείς), αναπήδηση ${m.touches >= 3 ? m.bounces + "/" + m.touches : "—"}</span></li>`).join("") + `</ul>`;
+    const na = r.mas.filter(m => m.na).map(m => m.kind + " " + m.p);
+    if (na.length) h += `<div style="color:var(--text-dim);font-size:0.76rem;">Παραλείφθηκαν (λίγα κεριά): ${na.join(", ")}</div>`;
+  }
+  h += `<h4>Δείκτες — ιστορικό τεστ (${SUG_H} κεριά μετά το σήμα)</h4>`;
+  h += `<ul>` + r.inds.map(x => x.na
+    ? `<li><b>${x.label}</b>: <span style="color:var(--text-dim)">λίγα σήματα (${x.n}) — χωρίς συμπέρασμα</span></li>`
+    : `<li>${r.picks.includes(x) ? "✅ " : ""}<b>${x.label}</b>: ${x.hits}/${x.n} σωστά (${pc(x.rate)}) · τυχαία αναμενόμενα ${pc(x.expected)} · <b style="color:${x.edge > 0 ? "#3ddc97" : "#ff5c6c"}">πλεονέκτημα ${x.edge > 0 ? "+" : ""}${(x.edge * 100).toFixed(0)}%</b></li>`).join("") + `</ul>`;
+  const parts = [];
+  if (r.bestMA) parts.push(`${r.bestMA.kind} ${r.bestMA.p}`);
+  r.picks.forEach(x => parts.push(x.id === "rsi" ? "RSI" : x.id === "macd" ? "MACD" : x.id === "bb" ? "Bollinger" : "Σχηματισμοί"));
+  h += `<h4>Πρόταση</h4>`;
+  h += parts.length ? `<div style="font-size:0.95rem;"><b style="color:#fbbf24">${parts.join(" + ")}</b></div>` : `<div>Κανένας δείκτης δεν ξεχώρισε καθαρά σε αυτό το διάστημα.</div>`;
+  if (parts.length) h += `<div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
+      <button class="icon-btn" style="border:1px solid #38bdf8;color:#38bdf8;padding:0.25rem 0.6rem;border-radius:6px;" onclick="applySuggestion(false)" title="Προσθέτει τα προτεινόμενα στα ήδη ενεργά">➕ Προσθήκη προτεινόμενων</button>
+      <button class="icon-btn" style="border:1px solid var(--border);padding:0.25rem 0.6rem;border-radius:6px;" onclick="applySuggestion(true)" title="Απενεργοποιεί τους άλλους δείκτες/Μ.Ο. και κρατά μόνο τα προτεινόμενα">🎯 Μόνο τα προτεινόμενα</button></div>`;
+  h += `<div class="iw-note">Η βαθμολογία δείχνει πόσο καλά ταίριαξε κάθε εργαλείο στο <b>παρελθόν</b> του ορατού διαστήματος, όχι ότι θα προβλέψει το μέλλον. «Πλεονέκτημα» = ποσοστό επιτυχίας μείον το αναμενόμενο από τύχη. Με λίγα σήματα το αποτέλεσμα είναι αβέβαιο. Δεν αποτελεί επενδυτική συμβουλή.</div>`;
+  return h;
+}
+
+let _sugLast = null;
+function sugCompute() {
+  if (!_lastCandles || !_lastCandles.length) return null;
+  _sugLast = sugAnalyze(_lastCandles);
+  return _sugLast;
+}
+function openSuggestion() {
+  const r = sugCompute();
+  const sel = document.getElementById("indicatorSelect");
+  const b = sel ? sel.getBoundingClientRect() : { left: 200, bottom: 100 };
+  openInfoWindow("🔎 Πρόταση δεικτών / Μ.Ο.", "#fbbf24", r ? sugHtml(r) : "<div>Δεν υπάρχουν δεδομένα γραφήματος.</div>", b.left, b.bottom);
+  suggestOpen = true;
+}
+function refreshSuggestion() {
+  const body = document.getElementById("infoWindowBody");
+  const w = document.getElementById("infoWindow");
+  if (!body || !w || w.style.display === "none") { suggestOpen = false; return; }
+  const r = sugCompute();
+  if (r) body.innerHTML = sugHtml(r);
+}
+function applySuggestion(only) {
+  const r = _sugLast;
+  if (!r || r.tooFew) return;
+  if (only) ["sma20", "sma50", "sma200", "ema20", "ema50", "bb", "rsi", "macd"].forEach(k => ind[k] = false);
+  if (r.bestMA) ind[r.bestMA.id] = true;
+  r.picks.forEach(x => { ind[x.id] = true; });
+  saveInd();
+  refreshIndicatorMenu();
+  applyIndicators(); // το wrapper του renderBigChart ανανεώνει το παράθυρο αν είναι ανοιχτό
+}
 
 /* ---------- Pattern commentary ---------- */
 const PATTERN_INFO = {
@@ -6389,6 +6605,7 @@ renderBigChart = function(candles) {
   if (candles && candles.length) _lastCandles = candles;
   _renderBigChartImpl(_lastCandles);
   autoSaveSession(); // auto-save whenever chart is (re)drawn
+  if (suggestOpen) refreshSuggestion();
 };
 
 /* Auto-save the current chart session (coin + interval + candles + lines).
@@ -6488,5 +6705,44 @@ loadData();
 })();
 </script>
 
+<script>
+/* Ονόματα (popup) για όλα τα κουμπιά και τα μενού */
+(function initTooltips() {
+  const T = {
+    cloudSyncBtn: "Συγχρονισμός δεδομένων μέσω Nextcloud", closeSyncModalBtn: "Κλείσιμο", saveSyncConfigBtn: "Αποθήκευση ρυθμίσεων συγχρονισμού",
+    testSyncBtn: "Έλεγχος σύνδεσης με τον server", syncNowBtn: "Άμεσος συγχρονισμός", disableSyncBtn: "Απενεργοποίηση συγχρονισμού",
+    closeOrderBookBtn: "Κλείσιμο", orderBookRefreshBtn: "Ανανέωση βιβλίου εντολών", closeSplitViewBtn: "Κλείσιμο σύγκρισης",
+    splitRefreshBtn: "Ανανέωση και των δύο γραφημάτων", addBtn: "Προσθήκη νομίσματος στη λίστα", curEUR: "Τιμές σε ευρώ", curUSD: "Τιμές σε δολάρια",
+    refreshBtn: "Ανανέωση τιμών", addTxBtn: "Προσθήκη συναλλαγής στο χαρτοφυλάκιο", histCalcBtn: "Υπολογισμός ιστορικής αξίας",
+    compareRunBtn: "Ανάλυση και πρόταση από AI", compareChatSendBtn: "Αποστολή μηνύματος", chatSendBtn: "Αποστολή μηνύματος", newsRefreshBtn: "Ανανέωση ειδήσεων",
+    closeModalBtn: "Κλείσιμο γραφήματος", regressionBtn: "Γραμμή γραμμικής παλινδρόμησης", trendlineBtn: "Σχεδίαση γραμμής τάσης",
+    channelBtn: "Σχεδίαση καναλιού", hlineBtn: "Οριζόντια γραμμή", toggleLinesBtn: "Εμφάνιση/απόκρυψη γραμμών", editLinesBtn: "Μετακίνηση/επεξεργασία γραμμών",
+    deleteLinesBtn: "Διαγραφή γραμμής με κλικ", clearLinesBtn: "Διαγραφή όλων των γραμμών", modalRefreshBtn: "Ανανέωση γραφήματος",
+    resetZoomBtn: "Επαναφορά zoom (πλήρης προβολή του γραφήματος)", snapshotBtn: "Λήψη εικόνας του γραφήματος", orderBookBtn: "Βιβλίο εντολών (order book)",
+    analyzeBtn: "Ανάλυση γραφήματος με AI", saveKeyBtn: "Αποθήκευση κλειδιού API (μόνο σε αυτή τη συσκευή)", clearKeyBtn: "Διαγραφή κλειδιού API",
+    runAnalysisBtn: "Εκτέλεση ανάλυσης", selectAllLinesBtn: "Επιλογή όλων των γραμμών", selectNoneLinesBtn: "Αποεπιλογή όλων των γραμμών",
+    minimizeAnalysisBtn: "Ελαχιστοποίηση / επαναφορά του πάνελ ανάλυσης", manualSaveBtn: "Αποθήκευση της τρέχουσας κατάστασης του γραφήματος",
+    clearSavedBtn: "Διαγραφή όλων των αποθηκευμένων καταστάσεων",
+    timeframeSelect: "Χρονικό διάστημα του γραφήματος", drawingToolSelect: "Εργαλεία σχεδίασης", indicatorSelect: "Τεχνικοί δείκτες, σχηματισμοί και πρόταση",
+    coinSelect: "Επιλογή νομίσματος", txCoinSelect: "Νόμισμα συναλλαγής", txTypeSelect: "Τύπος συναλλαγής", tvSymbolSelect: "Σύμβολο TradingView",
+    splitCoinSelectA: "Νόμισμα (αριστερά)", splitCoinSelectB: "Νόμισμα (δεξιά)", splitTimeframeSelect: "Χρονικό διάστημα (και για τα δύο γραφήματα)",
+    decimalsSelect: "Δεκαδικά ψηφία", dataRangeSelect: "Εύρος δεδομένων", analysisRangeSelect: "Εύρος ανάλυσης"
+  };
+  const SYM = { "✕": "Κλείσιμο / διαγραφή", "↻": "Ανανέωση", "⛶": "Μεγέθυνση / πλήρης οθόνη", "🏠": "Αρχική", "✖": "Κλείσιμο" };
+  function tip(el) {
+    if (el.title) return;
+    const id = el.id;
+    if (id && T[id]) { el.title = T[id]; return; }
+    const t = (el.textContent || "").trim();
+    if (SYM[t]) el.title = SYM[t];
+  }
+  function all(root) {
+    if (root.matches && root.matches("button, select")) tip(root);
+    if (root.querySelectorAll) root.querySelectorAll("button, select").forEach(tip);
+  }
+  all(document);
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) all(n); }))).observe(document.body, { childList: true, subtree: true });
+})();
+</script>
 </body>
 </html>

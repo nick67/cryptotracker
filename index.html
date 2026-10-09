@@ -2,7 +2,30 @@
 <html lang="el">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<script>
+/* Αυτόματη αναγνώριση συσκευής: κινητό → html.mobile. Χειροκίνητη επιλογή: ?view=mobile | ?view=desktop | ?view=auto */
+(function () {
+  var KEY = "crypto_tracker_view_v1", pref = "auto";
+  try {
+    var q = new URLSearchParams(location.search).get("view");
+    if (q === "mobile" || q === "desktop" || q === "auto") {
+      localStorage.setItem(KEY, q);
+      history.replaceState(null, "", location.pathname + location.hash);
+    }
+    pref = localStorage.getItem(KEY) || "auto";
+  } catch (e) {}
+  var ua = /Android|iPhone|iPod|Mobile|Windows Phone/i.test(navigator.userAgent);
+  var coarse = false, small = false;
+  try {
+    coarse = matchMedia("(pointer: coarse)").matches;
+    small = Math.min(screen.width, screen.height) <= 820;
+  } catch (e) {}
+  window.VIEW_PREF = pref;
+  window.IS_MOBILE = pref === "mobile" || (pref === "auto" && (ua || (coarse && small)));
+  if (window.IS_MOBILE) document.documentElement.classList.add("mobile");
+})();
+</script>
 <title>Παρακολούθηση Κρυπτονομισμάτων</title>
 <style>
   :root {
@@ -250,6 +273,88 @@
   #chatInputRow { display: flex; gap: 0.5rem; }
   #chatInputRow input { flex: 1; font-size: 0.88rem; }
   #chatInputRow button { white-space: nowrap; }
+
+  /* ================= ΕΚΔΟΣΗ ΚΙΝΗΤΟΥ (html.mobile) ================= */
+  #mBar, .m-max-btn, #mSheet, #mSheetBackdrop { display: none; }
+  html.mobile body { padding: 0.5rem; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+  html.mobile h1 { font-size: 1.02rem; }
+  html.mobile .subtitle, html.mobile .tabs, html.mobile footer .desk-note { display: none; }
+  html.mobile label:has(#decimalsSelect) { display: none !important; }
+  html.mobile #tab-portfolio, html.mobile #tab-tradingview, html.mobile #tab-compare, html.mobile #tab-news { display: none !important; }
+  html.mobile #tab-watchlist { display: block !important; }
+  html.mobile .grid { grid-template-columns: 1fr; gap: 0.6rem; }
+  html.mobile .toolbar { gap: 0.4rem; }
+  html.mobile .icon-btn { padding: 0.35rem 0.5rem; }
+  html.mobile button, html.mobile select { min-height: 38px; }
+
+  html.mobile .modal-box { padding: 0.35rem 0.45rem calc(0.35rem + env(safe-area-inset-bottom)); }
+  html.mobile .modal-head { flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.3rem; }
+  html.mobile #modalDecimalsSelect, html.mobile #splitViewBtn, html.mobile #modalTitle { display: none; }
+  html.mobile #closeModalBtn { margin-left: auto; font-size: 1.6rem; padding: 0 0.5rem; }
+  html.mobile #modalOhlcTicker { order: 5; flex: 1 0 100%; margin: 0.15rem 0 0 !important; font-size: 0.68rem; line-height: 1.3; white-space: normal; height: 2.7em; overflow: hidden; }
+  html.mobile .modal-tools, html.mobile #apikeyRow, html.mobile #analysisRangeRow, html.mobile #userLineSelectionRow,
+  html.mobile #patternFilterRow, html.mobile #analysisPanelBar, html.mobile #analysisPanel, html.mobile #savedAnalysesWrap,
+  html.mobile #bookmarksWrap, html.mobile #regStats { display: none !important; }
+
+  html.mobile #mBar { display: flex; gap: 0.4rem; margin-bottom: 0.35rem; flex-shrink: 0; }
+  html.mobile #mBar button { flex: 1; min-height: 42px; font-size: 0.9rem; padding: 0.3rem 0.4rem; white-space: nowrap; }
+  html.mobile #mBar .m-tf  { border-color: #f97316; color: #f97316; flex: 1.1; }
+  html.mobile #mBar .m-ind { border-color: #38bdf8; color: #38bdf8; flex: 1.6; }
+  html.mobile #mBar .m-ref { border-color: #22c55e; color: #22c55e; flex: 0.7; }
+  html.mobile #mBar .m-rst { border-color: #6b7280; color: #9aa1ac; flex: 0.9; }
+
+  html.mobile #bigChart, html.mobile #rsiChart, html.mobile #macdChart { touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  html.mobile .sub-panel { height: clamp(80px, 19vh, 170px) !important; }
+  html.mobile .sub-resize-handle { display: none; }
+  html.mobile .m-max-btn {
+    display: flex; align-items: center; justify-content: center; position: absolute; top: 4px; right: 4px; z-index: 6;
+    width: 34px; height: 34px; padding: 0; border-radius: 8px; font-size: 1.05rem; line-height: 1;
+    background: rgba(26,31,46,0.85); border: 1px solid var(--border); color: var(--text);
+  }
+  html.mobile .big-chart-wrap .m-max-btn { top: 2px; right: 2px; }
+
+  /* μεγιστοποίηση παραθύρου */
+  html.mobile .modal-box.mmax-price #subPanels { display: none !important; }
+  html.mobile .modal-box.mmax-rsi .big-chart-wrap, html.mobile .modal-box.mmax-macd .big-chart-wrap {
+    position: fixed; left: -300vw; top: 0; width: calc(100vw - 0.9rem); height: 50vh; flex: none;
+  }
+  html.mobile .modal-box.mmax-rsi #subPanels, html.mobile .modal-box.mmax-macd #subPanels {
+    display: flex !important; flex-direction: column; flex: 1 1 auto !important; min-height: 0;
+  }
+  html.mobile .modal-box.mmax-rsi #macdPanel, html.mobile .modal-box.mmax-macd #rsiPanel { display: none !important; }
+  html.mobile .modal-box.mmax-rsi #rsiPanel, html.mobile .modal-box.mmax-macd #macdPanel { flex: 1 1 auto; height: auto !important; min-height: 0; }
+
+  /* bottom sheet (χρονική περίοδος / δείκτες) */
+  html.mobile #mSheetBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 500; }
+  html.mobile #mSheetBackdrop.open { display: block; }
+  html.mobile #mSheet {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 501; max-height: 78vh; overflow-y: auto;
+    background: var(--panel); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
+    padding: 0.7rem 0.8rem calc(0.9rem + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform 0.18s ease-out;
+  }
+  html.mobile #mSheet.open { transform: none; }
+  .ms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; font-size: 0.95rem; }
+  .ms-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .ms-grid button, .ms-row, .ms-seg button { min-height: 46px; font-size: 0.95rem; }
+  .ms-grid button.on, .ms-seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .ms-list { display: flex; flex-direction: column; gap: 0.4rem; }
+  .ms-row { text-align: left; display: flex; align-items: center; gap: 0.6rem; }
+  .ms-row.on { border-color: #38bdf8; color: #38bdf8; background: rgba(56,189,248,0.1); }
+  .ms-sub { margin: 0.8rem 0 0.3rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .ms-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+  .ms-suggest { margin-top: 0.8rem; width: 100%; border-color: #fbbf24; color: #fbbf24; min-height: 46px; font-size: 0.95rem; }
+
+  /* παράθυρο σχολίων ως bottom sheet */
+  html.mobile #infoWindow {
+    left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important; width: 100% !important; max-width: 100vw;
+    height: var(--iw-h, 55vh) !important; max-height: 90vh; resize: none; border-radius: 16px 16px 0 0; z-index: 600;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  html.mobile #infoWindowHead { cursor: ns-resize; touch-action: none; padding: 0.7rem 0.8rem; }
+  html.mobile #infoWindowHead::before { content: ""; position: absolute; left: 50%; top: 5px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: rgba(148,163,184,0.5); }
+  html.mobile #infoWindow { position: fixed; }
+  html.mobile #infoWindowHead { position: relative; }
+  html.mobile #infoWindowBody { font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -525,6 +630,12 @@
   Σημείωση: το δωρεάν API του CoinGecko δεν παρέχει πραγματικό βιβλίο εντολών (bid/ask).
   Ως πλησιέστερα διαθέσιμα στοιχεία προσφοράς/ζήτησης εμφανίζονται το 24ω υψηλό και χαμηλό.
   Αυτόματη ανανέωση κάθε 30 δευτερόλεπτα. Δεν αποτελεί επενδυτική συμβουλή.
+  <div style="margin-top:0.5rem;">
+    Προβολή:
+    <a href="?view=mobile" style="color:var(--accent);">📱 Κινητό</a> ·
+    <a href="?view=desktop" style="color:var(--accent);">🖥 Υπολογιστής</a> ·
+    <a href="?view=auto" style="color:var(--accent);">Αυτόματη</a>
+  </div>
 </footer>
 
 <!-- Floating comment window (patterns / indicators) — draggable header, resizable corner -->
@@ -6544,7 +6655,8 @@ function renderBigChart(candles) {
           display: true,
           labels: {
             color: "#e8eaed",
-            filter: (item) => !item.text.startsWith("_")
+            filter: (item) => !item.text.startsWith("_"),
+            ...(window.IS_MOBILE ? { boxWidth: 14, padding: 6, font: { size: 10 } } : {})
           }
         },
         tooltip: {
@@ -6574,7 +6686,7 @@ function renderBigChart(candles) {
           },
           zoom: {
             wheel: { enabled: true, speed: 0.08 },
-            pinch: { enabled: true },
+            pinch: { enabled: !window.IS_MOBILE }, // στο κινητό το pinch το χειρίζεται η δική μας αφή
             mode: "x",
           }
         }
@@ -6705,6 +6817,273 @@ loadData();
 })();
 </script>
 
+<script>
+/* ================= ΕΚΔΟΣΗ ΚΙΝΗΤΟΥ ================= */
+(function mobileMode() {
+  if (!window.IS_MOBILE) return;
+  const $ = (id) => document.getElementById(id);
+  const modal = $("chartModal");
+  const box = modal.querySelector(".modal-box");
+  const canvas = $("bigChart");
+  const vib = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+  /* ---- μπάρα κουμπιών ---- */
+  const bar = document.createElement("div");
+  bar.id = "mBar";
+  bar.innerHTML = `<button class="m-tf" id="mTfBtn" title="Χρονική περίοδος">⏱ 1ω</button>
+    <button class="m-ind" id="mIndBtn" title="Δείκτες ανάλυσης">📊 Δείκτες</button>
+    <button class="m-rst" id="mRstBtn" title="Επαναφορά zoom">🔍↺</button>
+    <button class="m-ref" id="mRefBtn" title="Ανανέωση">↻</button>`;
+  box.insertBefore(bar, box.querySelector(".modal-tools"));
+  $("mRstBtn").addEventListener("click", () => { clearCross(); $("resetZoomBtn").click(); });
+  $("mRefBtn").addEventListener("click", () => $("modalRefreshBtn").click());
+
+  /* ---- bottom sheet ---- */
+  const backdrop = document.createElement("div"); backdrop.id = "mSheetBackdrop";
+  const sheet = document.createElement("div"); sheet.id = "mSheet";
+  document.body.appendChild(backdrop); document.body.appendChild(sheet);
+  let sheetKind = null;
+  function openSheet(kind, title, build) {
+    sheetKind = kind;
+    sheet.innerHTML = `<div class="ms-head"><b>${title}</b><button class="icon-btn" id="msClose" style="font-size:1.5rem;">✕</button></div><div id="msBody"></div>`;
+    build($("msBody"));
+    $("msClose").addEventListener("click", closeSheet);
+    backdrop.classList.add("open");
+    requestAnimationFrame(() => sheet.classList.add("open"));
+  }
+  function closeSheet() { sheetKind = null; sheet.classList.remove("open"); backdrop.classList.remove("open"); }
+  backdrop.addEventListener("click", closeSheet);
+
+  function tfLabel(o) { return o.textContent.replace("⏱", "").trim(); }
+  $("mTfBtn").addEventListener("click", () => {
+    openSheet("tf", "⏱ Χρονική περίοδος", (body) => {
+      const sel = $("timeframeSelect");
+      body.innerHTML = `<div class="ms-grid">` + [...sel.options].map(o =>
+        `<button data-v="${o.value}" class="${o.value === sel.value ? "on" : ""}">${tfLabel(o)}</button>`).join("") + `</div>`;
+      body.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        sel.value = b.dataset.v;
+        sel.dispatchEvent(new Event("change"));
+        closeSheet(); sync();
+      }));
+    });
+  });
+
+  function buildIndBody(body) {
+    const keep = sheet.scrollTop;
+    body.innerHTML = `<div class="ms-list">` + IND_DEFS.filter(d => !d.id.startsWith("_")).map(d =>
+      `<button class="ms-row ${ind[d.id] ? "on" : ""}" data-id="${d.id}">${ind[d.id] ? "✔" : "◻"} ${d.label}</button>`).join("") + `</div>
+      <div class="ms-sub">Ευαισθησία σχηματισμών</div>
+      <div class="ms-seg">` + ["loose", "normal", "strict"].map(k => `<button data-sens="${k}" class="${ind.sens === k ? "on" : ""}">${SENS_LABEL[k]}</button>`).join("") + `</div>
+      <button class="ms-suggest" id="msSuggest">🔎 Πρόταση: ποιος δείκτης/Μ.Ο. ταιριάζει καλύτερα;</button>`;
+    body.querySelectorAll(".ms-row").forEach(b => b.addEventListener("click", () => {
+      ind[b.dataset.id] = !ind[b.dataset.id];
+      saveInd(); refreshIndicatorMenu(); applyIndicators(); buildIndBody(body); sync();
+    }));
+    body.querySelectorAll("[data-sens]").forEach(b => b.addEventListener("click", () => {
+      ind.sens = b.dataset.sens; saveInd(); applyIndicators(); buildIndBody(body);
+    }));
+    $("msSuggest").addEventListener("click", () => { closeSheet(); openSuggestion(); });
+    sheet.scrollTop = keep;
+  }
+  $("mIndBtn").addEventListener("click", () => openSheet("ind", "📊 Δείκτες ανάλυσης", buildIndBody));
+
+  /* ---- μεγιστοποίηση ---- */
+  const MAXMODES = ["price", "rsi", "macd"];
+  let maxMode = null;
+  function mkMax(host, mode) {
+    const b = document.createElement("button");
+    b.className = "m-max-btn"; b.type = "button"; b.dataset.mode = mode; b.textContent = "⤢";
+    b.title = "Μεγιστοποίηση / επαναφορά παραθύρου";
+    b.addEventListener("click", (e) => { e.stopPropagation(); setMax(maxMode === mode ? null : mode); });
+    b.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
+    host.appendChild(b);
+  }
+  mkMax(document.querySelector("#chartModal .big-chart-wrap"), "price");
+  mkMax($("rsiPanel"), "rsi");
+  mkMax($("macdPanel"), "macd");
+  function setMax(mode) {
+    maxMode = mode;
+    MAXMODES.forEach(m => box.classList.toggle("mmax-" + m, m === mode));
+    box.querySelectorAll(".m-max-btn").forEach(b => { b.textContent = b.dataset.mode === mode ? "⤡" : "⤢"; });
+    requestAnimationFrame(() => {
+      if (bigChart) bigChart.resize();
+      Object.values(subCharts).forEach(c => c && c.resize());
+      if (typeof syncSubCharts === "function") syncSubCharts();
+    });
+  }
+
+  /* ---- συγχρονισμός ετικετών ---- */
+  function sync() {
+    const sel = $("timeframeSelect");
+    const o = sel.options[sel.selectedIndex];
+    if (o) $("mTfBtn").textContent = "⏱ " + tfLabel(o);
+    const n = IND_DEFS.filter(d => !d.id.startsWith("_") && ind[d.id]).length;
+    $("mIndBtn").textContent = "📊 Δείκτες" + (n ? " (" + n + ")" : "");
+    if ((maxMode === "rsi" && !subCharts.rsi) || (maxMode === "macd" && !subCharts.macd)) setMax(null);
+  }
+  const _render = renderBigChart;
+  renderBigChart = function (c) { _render(c); sync(); };
+  sync();
+  new MutationObserver(() => {
+    if (!modal.classList.contains("open")) { closeSheet(); setMax(null); clearCross(); } else sync();
+  }).observe(modal, { attributes: true, attributeFilter: ["class"] });
+
+  /* ---- αφή: σύρσιμο, pinch, crosshair ---- */
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  function xBounds() {
+    const cs = (typeof _lastCandles !== "undefined" && _lastCandles) || [];
+    return cs.length ? [cs[0][0], cs[cs.length - 1][0]] : null;
+  }
+  function applyX(min, max) {
+    const b = xBounds(), range = max - min;
+    if (b) {
+      // να μην «χαθεί» το γράφημα εντελώς εκτός δεδομένων
+      if (max < b[0] + range * 0.1) { max = b[0] + range * 0.1; min = max - range; }
+      if (min > b[1]) { min = b[1]; max = min + range; }
+    }
+    bigChart.options.scales.x.min = min;
+    bigChart.options.scales.x.max = max;
+    bigChart.update("none");
+  }
+  let raf = 0, pending = null;
+  function scheduleX(min, max) {
+    pending = [min, max];
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending && bigChart) applyX(pending[0], pending[1]); pending = null; });
+  }
+  function candleStep() {
+    const cs = _lastCandles; return cs && cs.length > 1 ? Math.max(1, cs[cs.length - 1][0] - cs[cs.length - 2][0]) : 60000;
+  }
+  function pinchTo(st, t0, t1) {
+    const d = dist(t0, t1) || 1;
+    let range = st.range * (st.d0 / d);
+    const b = xBounds(), minR = candleStep() * 6;
+    const maxR = b ? Math.max(minR * 2, (b[1] - b[0]) * 1.3) : st.range * 5;
+    range = Math.max(minR, Math.min(maxR, range));
+    const min = st.v0 - st.f0 * range;
+    scheduleX(min, min + range);
+  }
+
+  function nearestCandle(xPx) {
+    const cs = _lastCandles; if (!cs || !cs.length || !bigChart) return null;
+    const t = bigChart.scales.x.getValueForPixel(xPx);
+    let lo = 0, hi = cs.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (cs[m][0] < t) lo = m + 1; else hi = m; }
+    if (lo > 0 && Math.abs(cs[lo - 1][0] - t) < Math.abs(cs[lo][0] - t)) lo--;
+    return cs[lo];
+  }
+  function showTicker(c) {
+    if (!c) return;
+    updateOhlcTicker(c[1], c[2], c[3], c[4], c[5]);
+    const el = $("modalOhlcTicker");
+    const d = new Date(c[0]);
+    const pad = (n) => String(n).padStart(2, "0");
+    el.innerHTML = `<span style="color:#fbbf24">${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}</span> ` + el.innerHTML;
+  }
+  function setCross(x, y) {
+    if (!bigChart) return;
+    const ca = bigChart.chartArea;
+    crosshairPlugin._x = (x >= ca.left && x <= ca.right) ? x : null;
+    crosshairPlugin._y = (y >= ca.top && y <= ca.bottom) ? y : null;
+    if (typeof onMainCrosshair === "function") onMainCrosshair(crosshairPlugin._x);
+    if (crosshairPlugin._x !== null) showTicker(nearestCandle(x));
+    bigChart.draw();
+  }
+  function clearCross() {
+    if (!bigChart || crosshairPlugin._x === null) { crosshairPlugin._x = crosshairPlugin._y = null; return; }
+    crosshairPlugin._x = crosshairPlugin._y = null;
+    if (typeof onMainCrosshair === "function") onMainCrosshair(null);
+    const cs = _lastCandles;
+    if (cs && cs.length) { const l = cs[cs.length - 1]; updateOhlcTicker(l[1], l[2], l[3], l[4], l[5]); }
+    bigChart.draw();
+  }
+
+  // κοινός χειριστής αφής για το κύριο γράφημα και τα sub-panels
+  function attachTouch(el, isMain) {
+    let st = null, timer = 0;
+    const rel = (t) => { const r = el.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    const stopAll = (e) => { if (isMain) e.stopImmediatePropagation(); };
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+    el.addEventListener("touchstart", (e) => {
+      if (!bigChart) return;
+      stopAll(e);
+      const sc = bigChart.scales.x;
+      if (e.touches.length >= 2) {
+        clearTimeout(timer);
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const midX = (t0.clientX + t1.clientX) / 2 - el.getBoundingClientRect().left;
+        const mainRect = canvas.getBoundingClientRect();
+        const px = midX - 0 + (el.getBoundingClientRect().left - mainRect.left);
+        const v0 = sc.getValueForPixel(Math.max(bigChart.chartArea.left, Math.min(bigChart.chartArea.right, px)));
+        const range = sc.max - sc.min;
+        st = { mode: "pinch", d0: dist(t0, t1) || 1, range, v0, f0: (v0 - sc.min) / range };
+        clearCross();
+        return;
+      }
+      const p = rel(e.touches[0]);
+      st = { mode: "pending", x0: p.x, y0: p.y, cx: e.touches[0].clientX, t0: Date.now(), min: sc.min, max: sc.max, moved: false };
+      if (isMain) timer = setTimeout(() => {
+        if (st && st.mode === "pending") { st.mode = "cross"; vib(12); setCross(st.x0, st.y0); }
+      }, 230);
+    }, { passive: false });
+    el.addEventListener("touchmove", (e) => {
+      if (!st || !bigChart) return;
+      stopAll(e);
+      e.preventDefault();
+      if (st.mode === "pinch") { if (e.touches.length >= 2) pinchTo(st, e.touches[0], e.touches[1]); return; }
+      const p = rel(e.touches[0]);
+      if (st.mode === "cross") { setCross(p.x, p.y); return; }
+      const dx = p.x - st.x0;
+      if (st.mode === "pending") {
+        if (Math.abs(dx) + Math.abs(p.y - st.y0) < 8) return;
+        clearTimeout(timer);
+        st.mode = "pan"; st.moved = true;
+        clearCross();
+      }
+      if (st.mode === "pan") {
+        const ca = bigChart.chartArea, pxW = ca.right - ca.left || 1;
+        const shift = -(e.touches[0].clientX - st.cx) / pxW * (st.max - st.min);
+        scheduleX(st.min + shift, st.max + shift);
+      }
+    }, { passive: false });
+    const end = (e) => {
+      stopAll(e);
+      clearTimeout(timer);
+      if (!st) return;
+      if (e.touches && e.touches.length === 1 && st.mode === "pinch") {
+        // από pinch σε σύρσιμο με το δάχτυλο που έμεινε
+        const sc = bigChart.scales.x, p = rel(e.touches[0]);
+        st = { mode: "pan", x0: p.x, y0: p.y, cx: e.touches[0].clientX, min: sc.min, max: sc.max, moved: true };
+        return;
+      }
+      const wasTap = st.mode === "pending" && (Date.now() - st.t0) < 450;
+      const pos = { x: st.x0, y: st.y0 };
+      const cl = e.changedTouches && e.changedTouches[0];
+      st = null;
+      if (wasTap && isMain && bigChart) {
+        e.preventDefault(); // χωρίς «συνθετικά» mouse events
+        const evt = { clientX: cl.clientX, clientY: cl.clientY };
+        const tip = (typeof patternTipHit === "function") ? patternTipHit(evt, bigChart) : null;
+        if (tip && currentPatterns) { openPatternInfo(tip.hover.p, currentPatterns.candles, cl.clientX, cl.clientY); return; }
+        const same = crosshairPlugin._x !== null && Math.abs(crosshairPlugin._x - pos.x) < 14 && Math.abs((crosshairPlugin._y ?? -99) - pos.y) < 14;
+        if (same || pos.x < bigChart.chartArea.left) clearCross(); else setCross(pos.x, pos.y);
+      }
+    };
+    el.addEventListener("touchend", end, { passive: false });
+    el.addEventListener("touchcancel", (e) => { clearTimeout(timer); st = null; stopAll(e); }, { passive: false });
+  }
+  attachTouch(canvas, true);
+  attachTouch($("rsiChart"), false);
+  attachTouch($("macdChart"), false);
+
+  /* ---- παράθυρο σχολίων: σύρσιμο της κεφαλίδας αλλάζει ύψος ---- */
+  const iw = $("infoWindow"), ih = $("infoWindowHead");
+  ih.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const h = Math.max(110, Math.min(window.innerHeight * 0.9, window.innerHeight - e.touches[0].clientY));
+    iw.style.setProperty("--iw-h", Math.round(h) + "px");
+  }, { passive: false });
+})();
+</script>
 <script>
 /* Ονόματα (popup) για όλα τα κουμπιά και τα μενού */
 (function initTooltips() {

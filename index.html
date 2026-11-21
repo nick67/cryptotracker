@@ -355,6 +355,29 @@
   html.mobile #infoWindow { position: fixed; }
   html.mobile #infoWindowHead { position: relative; }
   html.mobile #infoWindowBody { font-size: 0.9rem; }
+
+  /* ===== Ειδοποιήσεις ===== */
+  #alertsBadge:not(:empty) { margin-left: 0.35rem; background: #ef4444; color: #fff; border-radius: 999px; padding: 0 0.4rem; font-size: 0.72rem; }
+  .al-sec { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.7rem; }
+  .al-sec h3 { margin: 0 0 0.45rem; font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .al-row { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin: 0.3rem 0; }
+  .al-rule { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; margin: 0.25rem 0; }
+  .al-rule.off { opacity: 0.5; }
+  .al-rule .al-txt { flex: 1; min-width: 0; }
+  .al-hist { max-height: 180px; overflow-y: auto; font-size: 0.8rem; }
+  .al-hist div { padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+  .al-add { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
+  .al-add select, .al-add button { width: 100%; box-sizing: border-box; }
+  .al-valrow { display: flex; align-items: center; gap: 0.5rem; }
+  .al-valrow input { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
+  .al-chip { padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.82rem; }
+  .al-chip.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .al-chip .al-n { background: rgba(251,191,36,0.9); color: #111; border-radius: 999px; padding: 0 0.35rem; margin-left: 0.2rem; font-size: 0.72rem; font-weight: 700; }
+  .al-note { color: var(--text-dim); font-size: 0.76rem; }
+  #alertToasts { position: fixed; top: 10px; right: 10px; z-index: 900; display: flex; flex-direction: column; gap: 0.4rem; max-width: min(380px, 92vw); }
+  .al-toast { background: var(--panel); border: 1px solid #fbbf24; border-left-width: 5px; border-radius: 8px; padding: 0.55rem 0.75rem; box-shadow: 0 6px 24px rgba(0,0,0,0.5); font-size: 0.85rem; cursor: pointer; }
+  .al-toast.buy { border-color: #3ddc97; } .al-toast.sell { border-color: #ff5c6c; }
+  .al-toast b { display: block; margin-bottom: 0.1rem; }
 </style>
 </head>
 <body>
@@ -375,6 +398,7 @@
       </select>
     </label>
     <span id="syncStatusIndicator" style="font-size:0.78rem; color:var(--text-dim);"></span>
+    <button id="alertsBtn" title="Ειδοποιήσεις τιμών και σημάτων">🔔 Ειδοποιήσεις<span id="alertsCount"></span><span id="alertsBadge"></span></button>
     <button id="cloudSyncBtn">☁ Cloud Sync</button>
   </div>
 </div>
@@ -409,6 +433,17 @@
         <input type="checkbox" id="autoSyncToggle"> Αυτόματος συγχρονισμός κατά την εκκίνηση και μετά από αλλαγές
       </label>
     </div>
+  </div>
+</div>
+
+<!-- ALERTS MODAL -->
+<div class="dialog-overlay" id="alertsModal" style="z-index:450;">
+  <div class="dialog-box" style="max-width:640px; max-height:90vh; overflow-y:auto;">
+    <div class="modal-head">
+      <h2>🔔 Ειδοποιήσεις</h2>
+      <button class="icon-btn" id="closeAlertsBtn" style="font-size:1.4rem;">✕</button>
+    </div>
+    <div id="alertsBody" style="display:flex; flex-direction:column; gap:0.8rem; font-size:0.88rem;"></div>
   </div>
 </div>
 
@@ -7114,10 +7149,332 @@ loadData();
 })();
 </script>
 <script>
+/* ================= ΕΙΔΟΠΟΙΗΣΕΙΣ ================= */
+(function alertsModule() {
+  const KEY = "crypto_tracker_alerts_v1", STKEY = "crypto_tracker_alert_state_v1", HKEY = "crypto_tracker_alert_hist_v1";
+  const $ = (id) => document.getElementById(id);
+  const TECH = {
+    rsi_os:   { label: "RSI < 30 (υπερπώληση — πιθανή αγορά)", side: "buy" },
+    rsi_ob:   { label: "RSI > 70 (υπεραγορά — πιθανή πώληση)", side: "sell" },
+    macd_up:  { label: "MACD: ανοδική διασταύρωση", side: "buy" },
+    macd_dn:  { label: "MACD: πτωτική διασταύρωση", side: "sell" },
+    bb_lo:    { label: "Κλείσιμο κάτω από Bollinger", side: "buy" },
+    bb_up:    { label: "Κλείσιμο πάνω από Bollinger", side: "sell" },
+    ema_up:   { label: "EMA 20 πάνω από EMA 50 (golden cross)", side: "buy" },
+    ema_dn:   { label: "EMA 20 κάτω από EMA 50 (death cross)", side: "sell" }
+  };
+  const TFS = ["15m", "1h", "4h", "1d"];
+  let cfg = { rules: [], sound: true, browser: false, ntfy: "", nextId: 1 };
+  let state = {}, hist = [];
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+  try { state = JSON.parse(localStorage.getItem(STKEY) || "{}"); } catch (e) {}
+  try { hist = JSON.parse(localStorage.getItem(HKEY) || "[]"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} };
+  const saveState = () => { try { localStorage.setItem(STKEY, JSON.stringify(state)); localStorage.setItem(HKEY, JSON.stringify(hist.slice(0, 40))); } catch (e) {} };
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const coinName = (id) => { const c = COIN_LIST.find(x => x.id === id); return c ? c.name : id; };
+  const coinSym = (id) => { const c = COIN_LIST.find(x => x.id === id); return c ? c.symbol.toUpperCase() : id; };
+  const cur = (c) => c === "usd" ? "$" : "€";
+  const num = (v) => v >= 100 ? v.toLocaleString("el-GR", { maximumFractionDigits: 2 }) : v >= 1 ? v.toFixed(3) : v.toPrecision(3);
+
+  /* ---------- παράδοση ---------- */
+  function beep(side) {
+    if (!cfg.sound) return;
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const t = ac.currentTime;
+      [side === "sell" ? [520, 390] : [660, 880]].flat().forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t + i * 0.18); g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.18 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.18 + 0.16);
+        o.start(t + i * 0.18); o.stop(t + i * 0.18 + 0.18);
+      });
+    } catch (e) {}
+  }
+  function toast(title, body, side) {
+    let box = $("alertToasts");
+    if (!box) { box = document.createElement("div"); box.id = "alertToasts"; document.body.appendChild(box); }
+    const el = document.createElement("div");
+    el.className = "al-toast " + (side || "");
+    el.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
+    el.addEventListener("click", () => el.remove());
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 20000);
+  }
+  let unread = 0;
+  function badge() {
+    const b = $("alertsBadge"); if (b) b.textContent = unread ? String(unread) : "";
+    const c = $("alertsCount"); if (c) { const n = cfg.rules.filter(r => r.on).length; c.textContent = n ? " (" + n + ")" : ""; }
+  }
+  function fire(rule, title, body, side) {
+    const entry = { t: Date.now(), title, body, side };
+    hist.unshift(entry); saveState();
+    unread++; badge();
+    toast(title, body, side); beep(side);
+    if (cfg.browser && "Notification" in window && Notification.permission === "granted") {
+      try { new Notification(title, { body, tag: "ct-" + rule.id }); } catch (e) { /* π.χ. Android Chrome: μόνο μέσω service worker */ }
+    }
+    if (cfg.ntfy) {
+      fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: cfg.ntfy, title, message: body, tags: [side === "sell" ? "chart_with_downwards_trend" : side === "buy" ? "chart_with_upwards_trend" : "bell"] }) }).catch(() => {});
+    }
+    if (document.getElementById("alertsModal").classList.contains("open")) render();
+  }
+
+  /* ---------- δεδομένα ---------- */
+  async function getPrice(coinId) {
+    const km = KRAKEN_EUR_MAP[coinId], bm = BINANCE_SYMBOL_MAP[coinId];
+    try {
+      if (currency === "eur" && km) {
+        const r = await (await fetch(`${KRAKEN_BASE}/Ticker?pair=${km}`)).json();
+        const k = Object.keys(r.result || {})[0];
+        if (k) return parseFloat(r.result[k].c[0]);
+      } else if (bm) {
+        const r = await (await fetch(`${BINANCE_BASE}/ticker/price?symbol=${bm}`)).json();
+        if (r && r.price) return parseFloat(r.price);
+      }
+    } catch (e) {}
+    const m = latestMarketData[coinId];
+    return m ? m.current_price : null;
+  }
+  const candleCache = {};
+  async function getCandles(coinId, tf) {
+    const k = coinId + "|" + tf + "|" + currency, c = candleCache[k];
+    if (c && Date.now() - c.at < 55000) return c.v;
+    const v = await fetchCandlesForCoin(coinId, tf, 120);
+    candleCache[k] = { at: Date.now(), v };
+    return v;
+  }
+
+  /* ---------- αξιολόγηση ---------- */
+  function techCheck(kind, candles) {
+    // μόνο ΚΛΕΙΣΤΑ κεριά (το τελευταίο σχηματίζεται ακόμη)
+    const cs = candles.slice(0, -1);
+    const n = cs.length;
+    if (n < 60) return null;
+    const closes = cs.map(c => c[4]);
+    const at = cs[n - 1][0];
+    const hit = (msg) => ({ at, msg });
+    if (kind === "rsi_os" || kind === "rsi_ob") {
+      const r = rsiSeries(closes), a = r[n - 2], b = r[n - 1];
+      if (a === null || b === null) return null;
+      if (kind === "rsi_os" && a >= 30 && b < 30) return hit(`RSI έπεσε κάτω από 30 (${b.toFixed(1)})`);
+      if (kind === "rsi_ob" && a <= 70 && b > 70) return hit(`RSI ανέβηκε πάνω από 70 (${b.toFixed(1)})`);
+    } else if (kind === "macd_up" || kind === "macd_dn") {
+      const h = macdSeries(closes).hist, a = h[n - 2], b = h[n - 1];
+      if (a === null || b === null) return null;
+      if (kind === "macd_up" && a <= 0 && b > 0) return hit("η MACD διέσχισε προς τα πάνω τη γραμμή σήματος");
+      if (kind === "macd_dn" && a >= 0 && b < 0) return hit("η MACD διέσχισε προς τα κάτω τη γραμμή σήματος");
+    } else if (kind === "bb_lo" || kind === "bb_up") {
+      const bb = computeBollinger(cs), l = bb[bb.length - 1], p = bb[bb.length - 2];
+      if (!l || !p) return null;
+      const cl = closes[n - 1], pc = closes[n - 2];
+      if (kind === "bb_lo" && cl < l.lo && pc >= p.lo) return hit("κλείσιμο κάτω από την κάτω μπάντα Bollinger");
+      if (kind === "bb_up" && cl > l.up && pc <= p.up) return hit("κλείσιμο πάνω από την πάνω μπάντα Bollinger");
+    } else if (kind === "ema_up" || kind === "ema_dn") {
+      const e20 = emaSeries(closes, 20), e50 = emaSeries(closes, 50);
+      const a = e20[n - 2] - e50[n - 2], b = e20[n - 1] - e50[n - 1];
+      if (!isFinite(a) || !isFinite(b)) return null;
+      if (kind === "ema_up" && a <= 0 && b > 0) return hit("ο EMA 20 διέσχισε προς τα πάνω τον EMA 50");
+      if (kind === "ema_dn" && a >= 0 && b < 0) return hit("ο EMA 20 διέσχισε προς τα κάτω τον EMA 50");
+    }
+    return null;
+  }
+
+  let running = false;
+  async function evaluate() {
+    if (running) return;
+    const rules = cfg.rules.filter(r => r.on);
+    if (!rules.length) return;
+    running = true;
+    try {
+      const prices = {};
+      for (const id of new Set(rules.filter(r => r.type === "price").map(r => r.coin))) prices[id] = await getPrice(id);
+      for (const r of rules) {
+        const st = state[r.id] || (state[r.id] = {});
+        const name = coinName(r.coin), sym = coinSym(r.coin);
+        try {
+          if (r.type === "price") {
+            const pr = prices[r.coin];
+            if (pr === null || pr === undefined || !isFinite(pr)) continue;
+            const c = cur(r.cur || currency);
+            if ((r.cur || currency) !== currency) continue;
+            const crossed = r.dir === "below" ? pr <= r.value : pr >= r.value;
+            if (crossed && st.armed !== false) {
+              st.armed = false;
+              fire(r, `${sym} ${r.dir === "below" ? "κάτω από" : "πάνω από"} ${c}${num(r.value)}`, `${name}: τρέχουσα τιμή ${c}${num(pr)}.`, r.dir === "below" ? "buy" : "sell");
+            } else if (!crossed && st.armed === false) {
+              // επανεξοπλισμός όταν η τιμή απομακρυνθεί 1% από το όριο
+              const back = r.dir === "below" ? pr > r.value * 1.01 : pr < r.value * 0.99;
+              if (back) st.armed = true;
+            } else if (st.armed === undefined) st.armed = true;
+          } else if (r.type === "drop" || r.type === "rise") {
+            const cs = await getCandles(r.coin, "1h");
+            const last = cs[cs.length - 1][4], ref = cs.length > 25 ? cs[cs.length - 25][4] : cs[0][4];
+            const ch = (last - ref) / ref * 100;
+            const hitNow = r.type === "drop" ? ch <= -r.value : ch >= r.value;
+            if (hitNow && st.armed !== false) {
+              st.armed = false;
+              fire(r, `${sym} ${r.type === "drop" ? "πτώση" : "άνοδος"} ${ch.toFixed(1)}% σε 24ω`, `${name}: τιμή ${cur(currency)}${num(last)}.`, r.type === "drop" ? "sell" : "buy");
+            } else if (!hitNow && st.armed === false && Math.abs(ch) < r.value * 0.6) st.armed = true;
+          } else if (r.type === "tech") {
+            const cs = await getCandles(r.coin, r.tf);
+            const res = techCheck(r.kind, cs);
+            if (res && st.last !== res.at) {
+              st.last = res.at;
+              const T = TECH[r.kind];
+              fire(r, `${sym} ${r.tf}: ${T.side === "buy" ? "πιθανό σήμα αγοράς" : "πιθανό σήμα πώλησης"}`, `${name} — ${res.msg}. Ενδεικτικό σήμα, όχι επενδυτική συμβουλή.`, T.side);
+            }
+          }
+        } catch (e) { /* προσωρινό σφάλμα δικτύου — δοκιμάζουμε στον επόμενο κύκλο */ }
+      }
+    } finally { saveState(); running = false; }
+  }
+
+  /* ---------- UI ---------- */
+  function ruleText(r) {
+    const n = coinSym(r.coin);
+    if (r.type === "price") return `${n}: τιμή ${r.dir === "below" ? "≤" : "≥"} ${cur(r.cur)}${num(r.value)}`;
+    if (r.type === "drop") return `${n}: πτώση ≥ ${r.value}% σε 24ω`;
+    if (r.type === "rise") return `${n}: άνοδος ≥ ${r.value}% σε 24ω`;
+    return `${n} (${r.tf}): ${TECH[r.kind].label}`;
+  }
+  let selCoin = null;
+  const rulesOf = (coin) => cfg.rules.filter(r => r.coin === coin);
+  function render() {
+    const ids = [...new Set([...(watchlist || []), ...cfg.rules.map(r => r.coin)])];
+    if (!selCoin || !ids.includes(selCoin)) selCoin = ids[0] || null;
+    const perm = "Notification" in window ? Notification.permission : "unsupported";
+    const chips = ids.map(id => {
+      const n = rulesOf(id).filter(r => r.on).length;
+      return `<button class="al-chip ${id === selCoin ? "sel" : ""}" data-coin="${id}">${esc(coinSym(id))}${n ? ` <span class="al-n">${n}</span>` : ""}</button>`;
+    }).join("");
+    let coinSec = `<div class="al-note">Πρόσθεσε πρώτα ένα νόμισμα στη λίστα παρακολούθησης.</div>`;
+    if (selCoin) {
+      const tech = Object.entries(TECH).map(([kind, T]) => {
+        const r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === kind);
+        return `<div class="al-rule ${r && r.on ? "" : "off"}">
+          <input type="checkbox" data-tech="${kind}" ${r && r.on ? "checked" : ""}>
+          <div class="al-txt">${esc(T.label)}</div>
+          <select data-tf="${kind}" ${r ? "" : "disabled"}>${TFS.map(t => `<option ${r && r.tf === t || (!r && t === "1h") ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
+      }).join("");
+      const custom = rulesOf(selCoin).filter(r => r.type !== "tech").map(r => `<div class="al-rule ${r.on ? "" : "off"}">
+          <input type="checkbox" data-tg="${r.id}" ${r.on ? "checked" : ""} title="Ενεργός">
+          <div class="al-txt">${esc(ruleText(r))}</div>
+          <button class="icon-btn" data-del="${r.id}" title="Διαγραφή" style="font-size:1.1rem;">✕</button></div>`).join("") || `<div class="al-note">Κανένας κανόνας τιμής ή κίνησης για αυτό το νόμισμα.</div>`;
+      coinSec = `
+        <h3 style="margin-top:0.2rem;">Τεχνικά σήματα — ${esc(coinName(selCoin))}</h3>
+        <div class="al-row"><button id="alTechAll" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Επιλογή όλων</button><button id="alTechNone" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Καμία</button></div>
+        ${tech}
+        <h3 style="margin-top:0.9rem;">Τιμή και κίνηση — ${esc(coinName(selCoin))}</h3>
+        ${custom}
+        <div class="al-add"><select id="alType"><option value="price_below">Τιμή κάτω από…</option><option value="price_above">Τιμή πάνω από…</option>
+            <option value="drop">Πτώση 24ω ≥ …%</option><option value="rise">Άνοδος 24ω ≥ …%</option></select>
+          <div class="al-valrow"><input type="number" id="alValue" step="any" placeholder="τιμή"><span id="alUnit" class="al-note"></span></div>
+          <button class="primary" id="alAdd">+ Προσθήκη</button></div>`;
+    }
+    $("alertsBody").innerHTML = `
+      <div class="al-sec"><h3>Νομίσματα — διάλεξε για να δεις/ορίσεις τους κανόνες του</h3>
+        <div class="al-row">${chips || '<span class="al-note">—</span>'}</div>
+        <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div></div>
+      <div class="al-sec">${coinSec}</div>
+      <div class="al-sec"><h3>Τρόπος ειδοποίησης</h3>
+        <label class="al-row"><input type="checkbox" id="alSound" ${cfg.sound ? "checked" : ""}> Ήχος</label>
+        <label class="al-row"><input type="checkbox" id="alBrowser" ${cfg.browser && perm !== "denied" && perm !== "unsupported" ? "checked" : ""} ${perm === "unsupported" ? "disabled" : ""}> Ειδοποιήσεις browser
+          <span class="al-note">${perm === "denied" ? "(αποκλεισμένες από τον browser)" : perm === "unsupported" ? "(δεν υποστηρίζονται εδώ)" : ""}</span></label>
+        <div class="al-row"><label class="al-note">Push στο κινητό μέσω ntfy.sh (προαιρετικό) — θέμα:</label>
+          <input type="text" id="alNtfy" value="${esc(cfg.ntfy)}" placeholder="π.χ. nikos-crypto-8x2k" style="flex:1; min-width:10rem;">
+          <button id="alNtfyTest">Δοκιμή</button></div>
+        <div class="al-note">Για push: εγκατέστησε την εφαρμογή ntfy στο κινητό και κάνε εγγραφή στο ίδιο θέμα. Το θέμα λειτουργεί σαν κωδικός — διάλεξε κάτι δύσκολο να το μαντέψει κάποιος. Το μήνυμα περνά από τον δημόσιο server ntfy.sh.</div>
+      </div>
+      <div class="al-sec"><h3>Ειδοποιήσεις 24/7 (GitHub Actions)</h3>
+        <div class="al-row"><button id="alExport">⬇ Εξαγωγή κανόνων (alerts-config.json)</button></div>
+        <div class="al-note">Αν ανεβάσεις το αρχείο στο repo με το script ειδοποιήσεων, ο έλεγχος τρέχει στο GitHub κάθε 5 λεπτά, ακόμη και με κλειστή τη σελίδα, και στέλνει push μέσω ntfy. Χρειάζεται θέμα ntfy παραπάνω. Μετά από κάθε αλλαγή κανόνων ξαναεξάγεις και ανεβάζεις το αρχείο.</div>
+      </div>
+      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
+      <div class="al-note">⚠ Οι ειδοποιήσεις ελέγχονται κάθε ~1 λεπτό <b>όσο η σελίδα είναι ανοιχτή</b> (και σε ανοιχτή καρτέλα στο παρασκήνιο στον υπολογιστή). Αν κλείσεις τη σελίδα ή το κινητό την παγώσει, δεν θα έρθει τίποτα. Δεν αποτελούν επενδυτική συμβουλή.</div>`;
+    const body = $("alertsBody");
+    body.querySelectorAll("[data-coin]").forEach(b => b.addEventListener("click", () => { selCoin = b.dataset.coin; render(); }));
+    if (selCoin) {
+      body.querySelectorAll("[data-tech]").forEach(cb => cb.addEventListener("change", () => {
+        const kind = cb.dataset.tech, tf = body.querySelector(`[data-tf="${kind}"]`).value;
+        let r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === kind);
+        if (cb.checked) { if (r) { r.on = true; r.tf = tf; } else cfg.rules.push({ id: "r" + cfg.nextId++, on: true, type: "tech", coin: selCoin, kind, tf }); if (r) state[r.id] = {}; }
+        else if (r) cfg.rules = cfg.rules.filter(x => x !== r);
+        save(); badge(); render(); if (cb.checked) evaluate();
+      }));
+      body.querySelectorAll("[data-tf]").forEach(sel => sel.addEventListener("change", () => {
+        const r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === sel.dataset.tf);
+        if (r) { r.tf = sel.value; state[r.id] = {}; save(); }
+      }));
+      $("alTechAll").addEventListener("click", () => {
+        Object.keys(TECH).forEach(kind => { if (!cfg.rules.some(x => x.coin === selCoin && x.type === "tech" && x.kind === kind)) cfg.rules.push({ id: "r" + cfg.nextId++, on: true, type: "tech", coin: selCoin, kind, tf: "1h" }); else cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === kind).on = true; });
+        save(); badge(); render(); evaluate();
+      });
+      $("alTechNone").addEventListener("click", () => { cfg.rules = cfg.rules.filter(x => !(x.coin === selCoin && x.type === "tech")); save(); badge(); render(); });
+      const typeSel = $("alType");
+      const upd = () => {
+        const t = typeSel.value;
+        $("alUnit").textContent = t.startsWith("price") ? cur(currency) : "%";
+        if (t.startsWith("price")) { const m = latestMarketData[selCoin]; $("alValue").placeholder = m ? "τρέχουσα: " + num(m.current_price) : "τιμή"; } else $("alValue").placeholder = "π.χ. 5";
+      };
+      typeSel.addEventListener("change", upd); upd();
+      $("alAdd").addEventListener("click", () => {
+        const t = typeSel.value, v = parseFloat($("alValue").value);
+        if (!isFinite(v) || v <= 0) { $("alValue").focus(); return; }
+        const rule = t.startsWith("price") ? { type: "price", coin: selCoin, dir: t === "price_below" ? "below" : "above", value: v, cur: currency } : { type: t, coin: selCoin, value: v };
+        cfg.rules.push({ id: "r" + cfg.nextId++, on: true, ...rule }); save(); badge(); render(); evaluate();
+      });
+      body.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { cfg.rules = cfg.rules.filter(r => r.id !== b.dataset.del); delete state[b.dataset.del]; save(); badge(); saveState(); render(); }));
+      body.querySelectorAll("[data-tg]").forEach(b => b.addEventListener("change", () => { const r = cfg.rules.find(x => x.id === b.dataset.tg); if (r) { r.on = b.checked; if (r.on) state[r.id] = {}; save(); badge(); render(); } }));
+    }
+    $("alSound").addEventListener("change", (e) => { cfg.sound = e.target.checked; save(); if (cfg.sound) beep("buy"); });
+    $("alBrowser").addEventListener("change", async (e) => {
+      if (!e.target.checked) { cfg.browser = false; save(); render(); return; }
+      cfg.browser = true; save();               // κρατάμε την επιλογή αμέσως· ο browser μπορεί να ζητήσει άδεια
+      let perm = Notification.permission;
+      if (perm !== "granted") {
+        try { perm = (await Notification.requestPermission()) || Notification.permission; } catch (er) { perm = Notification.permission; }
+        if (perm !== "granted") { await new Promise(r => setTimeout(r, 300)); perm = Notification.permission; }
+      }
+      cfg.browser = perm === "granted"; save();
+      if (cfg.browser) {
+        try { new Notification("Crypto Tracker", { body: "Οι ειδοποιήσεις browser ενεργοποιήθηκαν ✔" }); }
+        catch (er) { toast("Η συσκευή δεν δείχνει ειδοποιήσεις από σελίδα", "Σε κινητό χρησιμοποίησε push μέσω ntfy.", ""); }
+      }
+      render();
+    });
+    $("alExport").addEventListener("click", () => {
+      const out = { ntfy: cfg.ntfy, exported: new Date().toISOString(), rules: cfg.rules.map(r => ({ ...r, name: coinName(r.coin), sym: coinSym(r.coin), cur: r.cur || currency, kraken: KRAKEN_EUR_MAP[r.coin] || null, binance: BINANCE_SYMBOL_MAP[r.coin] || null })) };
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+      a.download = "alerts-config.json"; document.body.appendChild(a); a.click(); a.remove();
+    });
+    $("alNtfy").addEventListener("change", (e) => { cfg.ntfy = e.target.value.trim().replace(/[^\w-]/g, ""); save(); render(); });
+    $("alNtfyTest").addEventListener("click", () => {
+      const t = $("alNtfy").value.trim().replace(/[^\w-]/g, "");
+      if (!t) return;
+      cfg.ntfy = t; save();
+      fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: t, title: "Crypto Tracker", message: "Δοκιμαστική ειδοποίηση ✔" }) })
+        .then(r => toast(r.ok ? "Στάλθηκε δοκιμαστικό μήνυμα" : "Αποτυχία αποστολής", r.ok ? "Έλεγξε την εφαρμογή ntfy." : "HTTP " + r.status)).catch(() => toast("Αποτυχία αποστολής", "Δεν ήταν δυνατή η σύνδεση με το ntfy.sh."));
+    });
+  }
+  window.__alerts = { evaluate, cfg, fire, render, techCheck };
+
+  $("alertsBtn").addEventListener("click", () => { unread = 0; badge(); render(); $("alertsModal").classList.add("open"); });
+  $("closeAlertsBtn").addEventListener("click", () => $("alertsModal").classList.remove("open"));
+  $("alertsModal").addEventListener("click", (e) => { if (e.target === $("alertsModal")) $("alertsModal").classList.remove("open"); });
+
+  badge();
+  setInterval(evaluate, 60000);
+  setTimeout(evaluate, 4000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) evaluate(); });
+})();
+</script>
+<script>
 /* Ονόματα (popup) για όλα τα κουμπιά και τα μενού */
 (function initTooltips() {
   const T = {
-    cloudSyncBtn: "Συγχρονισμός δεδομένων μέσω Nextcloud", closeSyncModalBtn: "Κλείσιμο", saveSyncConfigBtn: "Αποθήκευση ρυθμίσεων συγχρονισμού",
+    cloudSyncBtn: "Συγχρονισμός δεδομένων μέσω Nextcloud", alertsBtn: "Ειδοποιήσεις τιμών και σημάτων", closeSyncModalBtn: "Κλείσιμο", saveSyncConfigBtn: "Αποθήκευση ρυθμίσεων συγχρονισμού",
     testSyncBtn: "Έλεγχος σύνδεσης με τον server", syncNowBtn: "Άμεσος συγχρονισμός", disableSyncBtn: "Απενεργοποίηση συγχρονισμού",
     closeOrderBookBtn: "Κλείσιμο", orderBookRefreshBtn: "Ανανέωση βιβλίου εντολών", closeSplitViewBtn: "Κλείσιμο σύγκρισης",
     splitRefreshBtn: "Ανανέωση και των δύο γραφημάτων", addBtn: "Προσθήκη νομίσματος στη λίστα", curEUR: "Τιμές σε ευρώ", curUSD: "Τιμές σε δολάρια",

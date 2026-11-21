@@ -1,0 +1,40 @@
+name: Crypto alerts
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # κάθε 5 λεπτά (το GitHub μπορεί να καθυστερεί λίγο)
+  workflow_dispatch: {}      # χειροκίνητη εκτέλεση από το tab Actions
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crypto-alerts
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # η «μνήμη» των κανόνων (ποιες ειδοποιήσεις έχουν ήδη σταλεί) κρατιέται στο cache
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: alert-state-${{ github.run_id }}
+          restore-keys: alert-state-
+      - name: Check alerts
+        run: node alerts.mjs
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: alert-state-${{ github.run_id }}

@@ -7169,7 +7169,7 @@ loadData();
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
   try { state = JSON.parse(localStorage.getItem(STKEY) || "{}"); } catch (e) {}
   try { hist = JSON.parse(localStorage.getItem(HKEY) || "[]"); } catch (e) {}
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} if (typeof ghAutoPush === "function") ghAutoPush(); };
   const saveState = () => { try { localStorage.setItem(STKEY, JSON.stringify(state)); localStorage.setItem(HKEY, JSON.stringify(hist.slice(0, 40))); } catch (e) {} };
   const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const coinName = (id) => { const c = COIN_LIST.find(x => x.id === id); return c ? c.name : id; };
@@ -7338,6 +7338,71 @@ loadData();
     if (r.type === "rise") return `${n}: άνοδος ≥ ${r.value}% σε 24ω`;
     return `${n} (${r.tf}): ${TECH[r.kind].label}`;
   }
+  /* ---------- GitHub: αποθήκευση / φόρτωση κανόνων ---------- */
+  const GHKEY = "crypto_tracker_gh_v1";
+  let gh = { repo: "", branch: "main", path: "alerts-config.json", token: "", noTopic: false, auto: false };
+  try { Object.assign(gh, JSON.parse(localStorage.getItem(GHKEY) || "{}")); } catch (e) {}
+  const saveGh = () => { try { localStorage.setItem(GHKEY, JSON.stringify(gh)); } catch (e) {} };
+  function buildExport() {
+    return { ntfy: gh.noTopic ? "" : cfg.ntfy, exported: new Date().toISOString(),
+      rules: cfg.rules.map(r => ({ ...r, name: coinName(r.coin), sym: coinSym(r.coin), cur: r.cur || currency, kraken: KRAKEN_EUR_MAP[r.coin] || null, binance: BINANCE_SYMBOL_MAP[r.coin] || null })) };
+  }
+  const b64 = (str) => { const bytes = new TextEncoder().encode(str); let bin = ""; bytes.forEach(b => bin += String.fromCharCode(b)); return btoa(bin); };
+  const unb64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, "")), c => c.charCodeAt(0)));
+  function ghSetStatus(msg, ok) { const el = $("ghStatus"); if (el) { el.textContent = msg; el.style.color = ok === true ? "#3ddc97" : ok === false ? "#ff5c6c" : ""; } }
+  function ghUrl() {
+    const repo = gh.repo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("Γράψε το repo ως χρήστης/όνομα.");
+    if (!gh.token) throw new Error("Λείπει το GitHub token.");
+    const path = (gh.path || "alerts-config.json").replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
+    return `https://api.github.com/repos/${repo}/contents/${path}`;
+  }
+  const ghHeaders = () => ({ Authorization: "Bearer " + gh.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" });
+  function ghErr(r, what) {
+    if (r.status === 401) return "Το token δεν έγινε δεκτό (401). Έλεγξέ το ή φτιάξε νέο.";
+    if (r.status === 403) return "Απαγόρευση (403): το token δεν έχει δικαίωμα Contents: Read and write σε αυτό το repo.";
+    if (r.status === 404) return `Δεν βρέθηκε ${what} (404): έλεγξε το repo, το branch και ότι το token έχει πρόσβαση σε αυτό το repo.`;
+    if (r.status === 409 || r.status === 422) return "Σύγκρουση εκδόσεων — πάτα ξανά το κουμπί.";
+    return "Σφάλμα GitHub: HTTP " + r.status;
+  }
+  async function ghPush(silent) {
+    try {
+      const url = ghUrl(), br = encodeURIComponent(gh.branch || "main");
+      if (!silent) ghSetStatus("Αποθήκευση…");
+      let sha;
+      const g = await fetch(`${url}?ref=${br}`, { headers: ghHeaders() });
+      if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error(ghErr(g, "το αρχείο"));
+      const body = { message: "Ενημέρωση κανόνων ειδοποιήσεων (Crypto Tracker)", content: b64(JSON.stringify(buildExport(), null, 2) + "\n"), branch: gh.branch || "main" };
+      if (sha) body.sha = sha;
+      const r = await fetch(url, { method: "PUT", headers: { ...ghHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(ghErr(r, "το repo"));
+      ghSetStatus("✔ Αποθηκεύτηκε στο GitHub (" + new Date().toLocaleTimeString("el-GR") + "). Ο έλεγχος θα χρησιμοποιεί τους νέους κανόνες στον επόμενο κύκλο.", true);
+      return true;
+    } catch (e) {
+      ghSetStatus("✖ " + (e.message || "Αποτυχία δικτύου — δοκίμασε ξανά."), false);
+      return false;
+    }
+  }
+  async function ghPull() {
+    try {
+      const url = ghUrl(), br = encodeURIComponent(gh.branch || "main");
+      ghSetStatus("Φόρτωση…");
+      const r = await fetch(`${url}?ref=${br}`, { headers: ghHeaders() });
+      if (!r.ok) throw new Error(ghErr(r, "το αρχείο"));
+      const j = await r.json();
+      const data = JSON.parse(unb64(j.content));
+      if (!Array.isArray(data.rules)) throw new Error("Το αρχείο δεν έχει έγκυρους κανόνες.");
+      const strip = ({ name, sym, kraken, binance, ...rest }) => rest;
+      cfg.rules = data.rules.map(strip);
+      cfg.nextId = Math.max(cfg.nextId, ...cfg.rules.map(r => parseInt(String(r.id).replace(/\D/g, "")) || 0)) + 1;
+      if (data.ntfy && !cfg.ntfy) cfg.ntfy = data.ntfy;
+      state = {}; ghSkipAuto = true; save(); ghSkipAuto = false; saveState(); badge(); render();
+      ghSetStatus(`✔ Φορτώθηκαν ${cfg.rules.length} κανόνες από το GitHub.`, true);
+    } catch (e) { ghSetStatus("✖ " + (e.message || "Αποτυχία"), false); }
+  }
+  let ghTimer = 0, ghSkipAuto = false;
+  function ghAutoPush() { if (!ghSkipAuto && gh.auto && gh.repo && gh.token) { clearTimeout(ghTimer); ghTimer = setTimeout(() => ghPush(true), 2500); } }
+
   let selCoin = null;
   const rulesOf = (coin) => cfg.rules.filter(r => r.coin === coin);
   function render() {
@@ -7387,8 +7452,19 @@ loadData();
         <div class="al-note">Για push: εγκατέστησε την εφαρμογή ntfy στο κινητό και κάνε εγγραφή στο ίδιο θέμα. Το θέμα λειτουργεί σαν κωδικός — διάλεξε κάτι δύσκολο να το μαντέψει κάποιος. Το μήνυμα περνά από τον δημόσιο server ntfy.sh.</div>
       </div>
       <div class="al-sec"><h3>Ειδοποιήσεις 24/7 (GitHub Actions)</h3>
-        <div class="al-row"><button id="alExport">⬇ Εξαγωγή κανόνων (alerts-config.json)</button></div>
-        <div class="al-note">Αν ανεβάσεις το αρχείο στο repo με το script ειδοποιήσεων, ο έλεγχος τρέχει στο GitHub κάθε 5 λεπτά, ακόμη και με κλειστή τη σελίδα, και στέλνει push μέσω ntfy. Χρειάζεται θέμα ntfy παραπάνω. Μετά από κάθε αλλαγή κανόνων ξαναεξάγεις και ανεβάζεις το αρχείο.</div>
+        <div class="al-note" style="margin-bottom:0.4rem;">Ο έλεγχος στο GitHub διαβάζει τους κανόνες από το αρχείο του repo. Εδώ τους γράφεις εκεί απευθείας.</div>
+        <div class="al-add">
+          <input type="text" id="ghRepo" value="${esc(gh.repo)}" placeholder="repo: χρήστης/όνομα (π.χ. nick67/crypto-tracker)">
+          <div class="al-valrow"><input type="text" id="ghBranch" value="${esc(gh.branch)}" placeholder="branch (main)"><input type="text" id="ghPath" value="${esc(gh.path)}" placeholder="αρχείο"></div>
+          <input type="password" id="ghToken" value="${esc(gh.token)}" placeholder="GitHub token (fine-grained, Contents: Read and write, μόνο για αυτό το repo)" autocomplete="off">
+          <label class="al-row"><input type="checkbox" id="ghNoTopic" ${gh.noTopic ? "checked" : ""}> Να μη γράφεται το θέμα ntfy στο αρχείο (το βάζω ως Secret NTFY_TOPIC)</label>
+          <label class="al-row"><input type="checkbox" id="ghAuto" ${gh.auto ? "checked" : ""}> Αυτόματη αποθήκευση στο GitHub μετά από κάθε αλλαγή κανόνων</label>
+          <button class="primary" id="ghPush">☁ Αποθήκευση κανόνων στο GitHub</button>
+          <button id="ghPull">⬇ Φόρτωση κανόνων από το GitHub (αντικαθιστά τους τοπικούς)</button>
+          <button id="alExport" style="font-size:0.8rem;">Λήψη ως αρχείο (alerts-config.json)</button>
+        </div>
+        <div id="ghStatus" class="al-note" style="margin-top:0.4rem;"></div>
+        <div class="al-note">Το token αποθηκεύεται μόνο σε αυτόν τον browser και στέλνεται μόνο στο api.github.com. Φτιάξ' το από GitHub → Settings → Developer settings → Fine-grained tokens, με πρόσβαση μόνο σε αυτό το repo και δικαίωμα «Contents: Read and write».</div>
       </div>
       <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
       <div class="al-note">⚠ Οι ειδοποιήσεις ελέγχονται κάθε ~1 λεπτό <b>όσο η σελίδα είναι ανοιχτή</b> (και σε ανοιχτή καρτέλα στο παρασκήνιο στον υπολογιστή). Αν κλείσεις τη σελίδα ή το κινητό την παγώσει, δεν θα έρθει τίποτα. Δεν αποτελούν επενδυτική συμβουλή.</div>`;
@@ -7444,11 +7520,15 @@ loadData();
       render();
     });
     $("alExport").addEventListener("click", () => {
-      const out = { ntfy: cfg.ntfy, exported: new Date().toISOString(), rules: cfg.rules.map(r => ({ ...r, name: coinName(r.coin), sym: coinSym(r.coin), cur: r.cur || currency, kraken: KRAKEN_EUR_MAP[r.coin] || null, binance: BINANCE_SYMBOL_MAP[r.coin] || null })) };
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(buildExport(), null, 2)], { type: "application/json" }));
       a.download = "alerts-config.json"; document.body.appendChild(a); a.click(); a.remove();
     });
+    const ghField = (id, key, isCheck) => $(id).addEventListener("change", (e) => { gh[key] = isCheck ? e.target.checked : e.target.value.trim(); saveGh(); });
+    ghField("ghRepo", "repo"); ghField("ghBranch", "branch"); ghField("ghPath", "path"); ghField("ghToken", "token");
+    ghField("ghNoTopic", "noTopic", true); ghField("ghAuto", "auto", true);
+    $("ghPush").addEventListener("click", () => { ["ghRepo", "ghBranch", "ghPath", "ghToken"].forEach(id => $(id).dispatchEvent(new Event("change"))); ghPush(false); });
+    $("ghPull").addEventListener("click", () => { ["ghRepo", "ghBranch", "ghPath", "ghToken"].forEach(id => $(id).dispatchEvent(new Event("change"))); ghPull(); });
     $("alNtfy").addEventListener("change", (e) => { cfg.ntfy = e.target.value.trim().replace(/[^\w-]/g, ""); save(); render(); });
     $("alNtfyTest").addEventListener("click", () => {
       const t = $("alNtfy").value.trim().replace(/[^\w-]/g, "");

@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-22T20:35:49.782Z",
+  "exported": "2026-11-22T20:35:56.615Z",
   "rules": [
     {
       "id": "r5",
@@ -12,110 +12,6 @@
       "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r10",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "rsi_ob",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r11",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "macd_dn",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r12",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "bb_up",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r13",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "ema_dn",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r14",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "rsi_os",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r15",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "bb_lo",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r16",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "ema_up",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r17",
-      "on": true,
-      "type": "tech",
-      "coin": "ripple",
-      "kind": "macd_up",
-      "tf": "1h",
-      "name": "XRP",
-      "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     }

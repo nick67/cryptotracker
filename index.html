@@ -369,7 +369,11 @@
   .al-add { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
   .al-add select, .al-add button { width: 100%; box-sizing: border-box; }
   .al-valrow { display: flex; align-items: center; gap: 0.5rem; }
+  .al-valrow button { width: auto; flex: 0 0 auto; }
+  .al-valrow button[style*="flex:1"] { flex: 1 1 0; }
   .al-valrow input { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
+  .al-i { font-size: 0.85rem; padding: 0 0.25rem; color: #38bdf8; }
+  .al-explain { color: var(--text-dim); font-size: 0.78rem; margin-top: 0.2rem; }
   .al-chip { padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.82rem; }
   .al-chip.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .al-chip .al-n { background: rgba(251,191,36,0.9); color: #111; border-radius: 999px; padding: 0 0.35rem; margin-left: 0.2rem; font-size: 0.72rem; font-weight: 700; }
@@ -7163,8 +7167,18 @@ loadData();
     ema_up:   { label: "EMA 20 πάνω από EMA 50 (golden cross)", side: "buy" },
     ema_dn:   { label: "EMA 20 κάτω από EMA 50 (death cross)", side: "sell" }
   };
+  const TECH_INFO = {
+    rsi_os:  "Ο RSI έπεσε κάτω από 30: η τιμή έχει πέσει πολύ γρήγορα και μπορεί να ανακάμψει (πιθανή αγορά).",
+    rsi_ob:  "Ο RSI ανέβηκε πάνω από 70: η τιμή έχει ανέβει πολύ γρήγορα και μπορεί να υποχωρήσει (πιθανή πώληση).",
+    macd_up: "Η γραμμή MACD ανεβαίνει πάνω από τη γραμμή σήματος: η ορμή γίνεται ανοδική (πιθανή αγορά).",
+    macd_dn: "Η γραμμή MACD κατεβαίνει κάτω από τη γραμμή σήματος: η ορμή γίνεται πτωτική (πιθανή πώληση).",
+    bb_lo:   "Κερί που κλείνει κάτω από την κάτω μπάντα Bollinger: ασυνήθιστα χαμηλή τιμή, συχνά ακολουθεί επιστροφή προς τον μέσο (πιθανή αγορά).",
+    bb_up:   "Κερί που κλείνει πάνω από την πάνω μπάντα Bollinger: ασυνήθιστα υψηλή τιμή, συχνά ακολουθεί επιστροφή προς τον μέσο (πιθανή πώληση).",
+    ema_up:  "Ο γρήγορος μέσος (EMA 20) περνά πάνω από τον αργό (EMA 50): ξεκινά ανοδική τάση (golden cross, πιθανή αγορά).",
+    ema_dn:  "Ο γρήγορος μέσος (EMA 20) περνά κάτω από τον αργό (EMA 50): ξεκινά πτωτική τάση (death cross, πιθανή πώληση)."
+  };
   const TFS = ["15m", "1h", "4h", "1d"];
-  let cfg = { rules: [], sound: true, browser: false, ntfy: "", nextId: 1 };
+  let cfg = { rules: [], groups: [], sound: true, browser: false, ntfy: "", nextId: 1 };
   let state = {}, hist = [];
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
   try { state = JSON.parse(localStorage.getItem(STKEY) || "{}"); } catch (e) {}
@@ -7340,7 +7354,7 @@ loadData();
   }
   /* ---------- GitHub: αποθήκευση / φόρτωση κανόνων ---------- */
   const GHKEY = "crypto_tracker_gh_v1";
-  let gh = { repo: "", branch: "main", path: "alerts-config.json", token: "", noTopic: false, auto: false };
+  let gh = { repo: "", branch: "main", path: "alerts-config.json", token: "", noTopic: false, auto: false, lastSha: "" };
   try { Object.assign(gh, JSON.parse(localStorage.getItem(GHKEY) || "{}")); } catch (e) {}
   const saveGh = () => { try { localStorage.setItem(GHKEY, JSON.stringify(gh)); } catch (e) {} };
   function buildExport() {
@@ -7365,22 +7379,41 @@ loadData();
     if (r.status === 409 || r.status === 422) return "Σύγκρουση εκδόσεων — πάτα ξανά το κουμπί.";
     return "Σφάλμα GitHub: HTTP " + r.status;
   }
+  let ghBusy = false, ghDirty = false;
   async function ghPush(silent) {
+    if (ghBusy) { ghDirty = true; return false; }     // μία αποθήκευση τη φορά· οι νεότερες αλλαγές στέλνονται μετά
+    ghBusy = true;
     try {
       const url = ghUrl(), br = encodeURIComponent(gh.branch || "main");
       if (!silent) ghSetStatus("Αποθήκευση…");
-      let sha;
-      const g = await fetch(`${url}?ref=${br}`, { headers: ghHeaders() });
-      if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error(ghErr(g, "το αρχείο"));
-      const body = { message: "Ενημέρωση κανόνων ειδοποιήσεων (Crypto Tracker)", content: b64(JSON.stringify(buildExport(), null, 2) + "\n"), branch: gh.branch || "main" };
-      if (sha) body.sha = sha;
-      const r = await fetch(url, { method: "PUT", headers: { ...ghHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error(ghErr(r, "το repo"));
-      ghSetStatus("✔ Αποθηκεύτηκε στο GitHub (" + new Date().toLocaleTimeString("el-GR") + "). Ο έλεγχος θα χρησιμοποιεί τους νέους κανόνες στον επόμενο κύκλο.", true);
-      return true;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        let sha;
+        const g = await fetch(`${url}?ref=${br}`, { headers: ghHeaders(), cache: "no-store" });
+        if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error(ghErr(g, "το αρχείο"));
+        // Άλλη συσκευή άλλαξε το αρχείο από την τελευταία φορά που το είδαμε εμείς;
+        if (silent && sha && gh.lastSha && sha !== gh.lastSha) {
+          ghSetStatus("⚠ Το αρχείο στο GitHub άλλαξε από άλλη συσκευή. Η αυτόματη αποθήκευση σταμάτησε για να μην το αντικαταστήσει. Πάτα «Φόρτωση από το GitHub» για να πάρεις τους νεότερους κανόνες ή «Αποθήκευση» για να τους αντικαταστήσεις με τους δικούς σου.", false);
+          toast("Αλλαγή από άλλη συσκευή", "Οι κανόνες στο GitHub διαφέρουν. Άνοιξε τις Ειδοποιήσεις για να επιλέξεις.", "");
+          return false;
+        }
+        const body = { message: "Ενημέρωση κανόνων ειδοποιήσεων (Crypto Tracker)", content: b64(JSON.stringify(buildExport(), null, 2) + "\n"), branch: gh.branch || "main" };
+        if (sha) body.sha = sha;
+        const r = await fetch(url, { method: "PUT", headers: { ...ghHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (r.status === 409 || r.status === 422) {          // ταυτόχρονη εγγραφή (π.χ. από το κινητό) — νέα προσπάθεια με φρέσκια έκδοση
+          if (attempt < 3) { ghSetStatus(`Ταυτόχρονη αλλαγή από άλλη συσκευή· νέα προσπάθεια (${attempt}/3)…`); await new Promise(res => setTimeout(res, 800 * attempt + Math.random() * 700)); continue; }
+          throw new Error("Άλλη συσκευή αποθηκεύει ταυτόχρονα. Δοκίμασε ξανά σε λίγα δευτερόλεπτα.");
+        }
+        if (!r.ok) throw new Error(ghErr(r, "το repo"));
+        try { gh.lastSha = (await r.json()).content.sha; saveGh(); } catch (e) {}
+        ghSetStatus("✔ Αποθηκεύτηκε στο GitHub (" + new Date().toLocaleTimeString("el-GR") + "). Ο έλεγχος θα χρησιμοποιεί τους νέους κανόνες στον επόμενο κύκλο.", true);
+        return true;
+      }
     } catch (e) {
       ghSetStatus("✖ " + (e.message || "Αποτυχία δικτύου — δοκίμασε ξανά."), false);
       return false;
+    } finally {
+      ghBusy = false;
+      if (ghDirty) { ghDirty = false; ghAutoPush(); }
     }
   }
   async function ghPull() {
@@ -7390,6 +7423,7 @@ loadData();
       const r = await fetch(`${url}?ref=${br}`, { headers: ghHeaders() });
       if (!r.ok) throw new Error(ghErr(r, "το αρχείο"));
       const j = await r.json();
+      gh.lastSha = j.sha; saveGh();
       const data = JSON.parse(unb64(j.content));
       if (!Array.isArray(data.rules)) throw new Error("Το αρχείο δεν έχει έγκυρους κανόνες.");
       const strip = ({ name, sym, kraken, binance, ...rest }) => rest;
@@ -7403,7 +7437,19 @@ loadData();
   let ghTimer = 0, ghSkipAuto = false;
   function ghAutoPush() { if (!ghSkipAuto && gh.auto && gh.repo && gh.token) { clearTimeout(ghTimer); ghTimer = setTimeout(() => ghPush(true), 2500); } }
 
-  let selCoin = null;
+  let selCoin = null, grSelId = null;
+  const grpSummary = (g) => !g ? "" : g.rules.map(r => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0]} ${r.tf}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`).join(" · ");
+  function grpApply(g, replace) {
+    if (!g || !selCoin) return;
+    if (replace) cfg.rules = cfg.rules.filter(r => !(r.coin === selCoin && r.type !== "price"));
+    g.rules.forEach(t => {
+      if (t.type === "tech") {
+        const r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === t.kind);
+        if (r) { r.on = true; r.tf = t.tf; state[r.id] = {}; } else cfg.rules.push({ id: "r" + cfg.nextId++, on: true, type: "tech", coin: selCoin, kind: t.kind, tf: t.tf });
+      } else if (!cfg.rules.some(x => x.coin === selCoin && x.type === t.type && x.value === t.value)) cfg.rules.push({ id: "r" + cfg.nextId++, on: true, type: t.type, coin: selCoin, value: t.value });
+    });
+    save(); badge(); render(); evaluate();
+  }
   const rulesOf = (coin) => cfg.rules.filter(r => r.coin === coin);
   function render() {
     const ids = [...new Set([...(watchlist || []), ...cfg.rules.map(r => r.coin)])];
@@ -7417,17 +7463,29 @@ loadData();
     if (selCoin) {
       const tech = Object.entries(TECH).map(([kind, T]) => {
         const r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === kind);
-        return `<div class="al-rule ${r && r.on ? "" : "off"}">
+        return `<div class="al-rule ${r && r.on ? "" : "off"}" title="${esc(TECH_INFO[kind])}">
           <input type="checkbox" data-tech="${kind}" ${r && r.on ? "checked" : ""}>
-          <div class="al-txt">${esc(T.label)}</div>
+          <div class="al-txt">${esc(T.label)} <button class="icon-btn al-i" data-info="${kind}" title="${esc(TECH_INFO[kind])}">ⓘ</button><div class="al-explain" id="alx-${kind}" style="display:none;">${esc(TECH_INFO[kind])}</div></div>
           <select data-tf="${kind}" ${r ? "" : "disabled"}>${TFS.map(t => `<option ${r && r.tf === t || (!r && t === "1h") ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
       }).join("");
       const custom = rulesOf(selCoin).filter(r => r.type !== "tech").map(r => `<div class="al-rule ${r.on ? "" : "off"}">
           <input type="checkbox" data-tg="${r.id}" ${r.on ? "checked" : ""} title="Ενεργός">
           <div class="al-txt">${esc(ruleText(r))}</div>
           <button class="icon-btn" data-del="${r.id}" title="Διαγραφή" style="font-size:1.1rem;">✕</button></div>`).join("") || `<div class="al-note">Κανένας κανόνας τιμής ή κίνησης για αυτό το νόμισμα.</div>`;
-      coinSec = `
-        <h3 style="margin-top:0.2rem;">Τεχνικά σήματα — ${esc(coinName(selCoin))}</h3>
+      if (!Array.isArray(cfg.groups)) cfg.groups = [];
+      const grp = `
+        <h3 style="margin-top:0.2rem;">Ομάδες κανόνων</h3>
+        <div class="al-add">
+          ${cfg.groups.length ? `<select id="grSel">${cfg.groups.map(g => `<option value="${g.id}" ${g.id === grSelId ? "selected" : ""}>${esc(g.name)} (${g.rules.length})</option>`).join("")}</select>
+          <div class="al-valrow"><button id="grApply" style="flex:1;" title="Προσθέτει/ενημερώνει τους κανόνες της ομάδας στο επιλεγμένο νόμισμα">Εφαρμογή στο ${esc(coinSym(selCoin))}</button>
+            <button id="grReplace" style="flex:1;" title="Σβήνει πρώτα τα τεχνικά σήματα και τους κανόνες % του νομίσματος και βάζει όσα έχει η ομάδα">Αντικατάσταση</button>
+            <button class="icon-btn" id="grDel" title="Διαγραφή ομάδας" style="font-size:1.1rem;">✕</button></div>
+          <div class="al-note" id="grNote">${esc(grpSummary(cfg.groups.find(g => g.id === grSelId) || cfg.groups[0]))}</div>` : `<div class="al-note">Δεν υπάρχουν αποθηκευμένες ομάδες.</div>`}
+          <div class="al-valrow"><input type="text" id="grName" placeholder="Όνομα νέας ομάδας (π.χ. Συντηρητικά)"><button id="grSave" title="Αποθηκεύει τα τρέχοντα τεχνικά σήματα και τους κανόνες ποσοστού του επιλεγμένου νομίσματος">💾 Αποθήκευση</button></div>
+          <div class="al-note">Η ομάδα κρατά τα τεχνικά σήματα (με χρονικό διάστημα) και τους κανόνες πτώσης/ανόδου %. Οι κανόνες συγκεκριμένης τιμής δεν περιλαμβάνονται, γιατί ισχύουν για ένα νόμισμα.</div>
+        </div>`;
+      coinSec = grp + `
+        <h3 style="margin-top:0.9rem;">Τεχνικά σήματα — ${esc(coinName(selCoin))}</h3>
         <div class="al-row"><button id="alTechAll" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Επιλογή όλων</button><button id="alTechNone" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Καμία</button></div>
         ${tech}
         <h3 style="margin-top:0.9rem;">Τιμή και κίνηση — ${esc(coinName(selCoin))}</h3>
@@ -7471,6 +7529,25 @@ loadData();
     const body = $("alertsBody");
     body.querySelectorAll("[data-coin]").forEach(b => b.addEventListener("click", () => { selCoin = b.dataset.coin; render(); }));
     if (selCoin) {
+      body.querySelectorAll("[data-info]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); const x = $("alx-" + b.dataset.info); x.style.display = x.style.display === "none" ? "" : "none"; }));
+      const gsel = $("grSel");
+      if (gsel) {
+        grSelId = gsel.value;
+        gsel.addEventListener("change", () => { grSelId = gsel.value; $("grNote").textContent = grpSummary(cfg.groups.find(g => g.id === grSelId)); });
+        $("grApply").addEventListener("click", () => grpApply(cfg.groups.find(g => g.id === gsel.value), false));
+        $("grReplace").addEventListener("click", () => grpApply(cfg.groups.find(g => g.id === gsel.value), true));
+        $("grDel").addEventListener("click", () => { cfg.groups = cfg.groups.filter(g => g.id !== gsel.value); grSelId = null; save(); render(); });
+      }
+      $("grSave").addEventListener("click", () => {
+        const name = $("grName").value.trim();
+        const rs = rulesOf(selCoin).filter(r => r.type !== "price" && r.on).map(r => r.type === "tech" ? { type: "tech", kind: r.kind, tf: r.tf } : { type: r.type, value: r.value });
+        if (!name) { $("grName").focus(); return; }
+        if (!rs.length) { $("grName").value = ""; $("grName").placeholder = "Ενεργοποίησε πρώτα κάποιους κανόνες για αυτό το νόμισμα"; return; }
+        const ex = cfg.groups.find(g => g.name.toLowerCase() === name.toLowerCase());
+        if (ex) ex.rules = rs; else { const g = { id: "g" + (cfg.nextGid = (cfg.nextGid || 0) + 1), name, rules: rs }; cfg.groups.push(g); grSelId = g.id; }
+        if (ex) grSelId = ex.id;
+        save(); render();
+      });
       body.querySelectorAll("[data-tech]").forEach(cb => cb.addEventListener("change", () => {
         const kind = cb.dataset.tech, tf = body.querySelector(`[data-tf="${kind}"]`).value;
         let r = cfg.rules.find(x => x.coin === selCoin && x.type === "tech" && x.kind === kind);

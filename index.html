@@ -374,6 +374,8 @@
   .al-valrow input { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
   .al-i { font-size: 0.85rem; padding: 0 0.25rem; color: #38bdf8; }
   .al-explain { color: var(--text-dim); font-size: 0.78rem; margin-top: 0.2rem; }
+  .al-tag { display: inline-flex; align-items: center; gap: 0.15rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.1rem 0.35rem; font-size: 0.78rem; }
+  .al-tag.buy { border-color: #3ddc97; } .al-tag.sell { border-color: #ff5c6c; }
   .al-chip { padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.82rem; }
   .al-chip.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .al-chip .al-n { background: rgba(251,191,36,0.9); color: #111; border-radius: 999px; padding: 0 0.35rem; margin-left: 0.2rem; font-size: 0.72rem; font-weight: 700; }
@@ -7437,7 +7439,7 @@ loadData();
   let ghTimer = 0, ghSkipAuto = false;
   function ghAutoPush() { if (!ghSkipAuto && gh.auto && gh.repo && gh.token) { clearTimeout(ghTimer); ghTimer = setTimeout(() => ghPush(true), 2500); } }
 
-  let selCoin = null, grSelId = null;
+  let selCoin = null, grSelId = null, ghOpen = false;
   const grpSummary = (g) => !g ? "" : g.rules.map(r => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0]} ${r.tf}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`).join(" · ");
   function grpApply(g, replace) {
     if (!g || !selCoin) return;
@@ -7495,11 +7497,27 @@ loadData();
           <div class="al-valrow"><input type="number" id="alValue" step="any" placeholder="τιμή"><span id="alUnit" class="al-note"></span></div>
           <button class="primary" id="alAdd">+ Προσθήκη</button></div>`;
     }
+    const shortTxt = (r) => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0].replace("Κλείσιμο ", "")} ${r.tf}` : r.type === "price" ? `τιμή ${r.dir === "below" ? "≤" : "≥"} ${cur(r.cur)}${num(r.value)}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`;
+    const activeCoins = ids.filter(id => rulesOf(id).some(r => r.on));
+    const activeHtml = activeCoins.length ? activeCoins.map(id => `<div class="al-row" style="align-items:flex-start;">
+        <button class="al-chip ${id === selCoin ? "sel" : ""}" data-coin="${id}" title="Άνοιγμα κανόνων ${esc(coinName(id))}">${esc(coinSym(id))}</button>
+        <div style="flex:1; display:flex; flex-wrap:wrap; gap:0.3rem;">${rulesOf(id).filter(r => r.on).map(r => `<span class="al-tag ${r.type === "tech" ? (TECH[r.kind].side === "buy" ? "buy" : "sell") : ""}" title="${esc(ruleText(r))}">${esc(shortTxt(r))} <button class="icon-btn" data-qdel="${r.id}" title="Διαγραφή" style="font-size:0.9rem; padding:0 0.15rem;">✕</button></span>`).join("")}</div></div>`).join("")
+      : `<div class="al-note">Δεν υπάρχουν ενεργοί κανόνες.</div>`;
     $("alertsBody").innerHTML = `
       <div class="al-sec"><h3>Νομίσματα — διάλεξε για να δεις/ορίσεις τους κανόνες του</h3>
         <div class="al-row">${chips || '<span class="al-note">—</span>'}</div>
         <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div></div>
+      <div class="al-sec"><h3>Τρέχουσες ειδοποιήσεις (ενεργοί κανόνες)</h3>${activeHtml}</div>
+      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
       <div class="al-sec">${coinSec}</div>
+      <div class="al-sec"><h3>Συγχρονισμός κανόνων με το GitHub</h3>
+        <div class="al-add">
+          <button class="primary" id="ghPush">☁ Αποθήκευση κανόνων στο GitHub</button>
+          <button id="ghPull">⬇ Φόρτωση κανόνων από το GitHub (αντικαθιστά τους τοπικούς)</button>
+          <button id="alExport" style="font-size:0.8rem;">Λήψη ως αρχείο (alerts-config.json)</button>
+        </div>
+        <div id="ghStatus" class="al-note" style="margin-top:0.4rem;"></div>
+      </div>
       <div class="al-sec"><h3>Τρόπος ειδοποίησης</h3>
         <label class="al-row"><input type="checkbox" id="alSound" ${cfg.sound ? "checked" : ""}> Ήχος</label>
         <label class="al-row"><input type="checkbox" id="alBrowser" ${cfg.browser && perm !== "denied" && perm !== "unsupported" ? "checked" : ""} ${perm === "unsupported" ? "disabled" : ""}> Ειδοποιήσεις browser
@@ -7509,24 +7527,20 @@ loadData();
           <button id="alNtfyTest">Δοκιμή</button></div>
         <div class="al-note">Για push: εγκατέστησε την εφαρμογή ntfy στο κινητό και κάνε εγγραφή στο ίδιο θέμα. Το θέμα λειτουργεί σαν κωδικός — διάλεξε κάτι δύσκολο να το μαντέψει κάποιος. Το μήνυμα περνά από τον δημόσιο server ntfy.sh.</div>
       </div>
-      <div class="al-sec"><h3>Ειδοποιήσεις 24/7 (GitHub Actions)</h3>
-        <div class="al-note" style="margin-bottom:0.4rem;">Ο έλεγχος στο GitHub διαβάζει τους κανόνες από το αρχείο του repo. Εδώ τους γράφεις εκεί απευθείας.</div>
+      <details class="al-sec" id="ghDetails" ${ghOpen ? "open" : ""}><summary style="cursor:pointer; font-weight:600;">⚙ Ρυθμίσεις GitHub (repo, token)${gh.repo && gh.token ? " ✔" : ""}</summary>
+        <div class="al-note" style="margin:0.5rem 0;">Ο έλεγχος στο GitHub διαβάζει τους κανόνες από το αρχείο του repo.</div>
         <div class="al-add">
           <input type="text" id="ghRepo" value="${esc(gh.repo)}" placeholder="repo: χρήστης/όνομα (π.χ. nick67/crypto-tracker)">
           <div class="al-valrow"><input type="text" id="ghBranch" value="${esc(gh.branch)}" placeholder="branch (main)"><input type="text" id="ghPath" value="${esc(gh.path)}" placeholder="αρχείο"></div>
           <input type="password" id="ghToken" value="${esc(gh.token)}" placeholder="GitHub token (fine-grained, Contents: Read and write, μόνο για αυτό το repo)" autocomplete="off">
           <label class="al-row"><input type="checkbox" id="ghNoTopic" ${gh.noTopic ? "checked" : ""}> Να μη γράφεται το θέμα ntfy στο αρχείο (το βάζω ως Secret NTFY_TOPIC)</label>
           <label class="al-row"><input type="checkbox" id="ghAuto" ${gh.auto ? "checked" : ""}> Αυτόματη αποθήκευση στο GitHub μετά από κάθε αλλαγή κανόνων</label>
-          <button class="primary" id="ghPush">☁ Αποθήκευση κανόνων στο GitHub</button>
-          <button id="ghPull">⬇ Φόρτωση κανόνων από το GitHub (αντικαθιστά τους τοπικούς)</button>
-          <button id="alExport" style="font-size:0.8rem;">Λήψη ως αρχείο (alerts-config.json)</button>
         </div>
-        <div id="ghStatus" class="al-note" style="margin-top:0.4rem;"></div>
         <div class="al-note">Το token αποθηκεύεται μόνο σε αυτόν τον browser και στέλνεται μόνο στο api.github.com. Φτιάξ' το από GitHub → Settings → Developer settings → Fine-grained tokens, με πρόσβαση μόνο σε αυτό το repo και δικαίωμα «Contents: Read and write».</div>
-      </div>
-      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
+      </details>
       <div class="al-note">⚠ Οι ειδοποιήσεις ελέγχονται κάθε ~1 λεπτό <b>όσο η σελίδα είναι ανοιχτή</b> (και σε ανοιχτή καρτέλα στο παρασκήνιο στον υπολογιστή). Αν κλείσεις τη σελίδα ή το κινητό την παγώσει, δεν θα έρθει τίποτα. Δεν αποτελούν επενδυτική συμβουλή.</div>`;
     const body = $("alertsBody");
+    body.querySelectorAll("[data-qdel]").forEach(b => b.addEventListener("click", () => { cfg.rules = cfg.rules.filter(r => r.id !== b.dataset.qdel); delete state[b.dataset.qdel]; save(); badge(); saveState(); render(); }));
     body.querySelectorAll("[data-coin]").forEach(b => b.addEventListener("click", () => { selCoin = b.dataset.coin; render(); }));
     if (selCoin) {
       body.querySelectorAll("[data-info]").forEach(b => b.addEventListener("click", (e) => { e.stopPropagation(); const x = $("alx-" + b.dataset.info); x.style.display = x.style.display === "none" ? "" : "none"; }));
@@ -7596,6 +7610,7 @@ loadData();
       }
       render();
     });
+    $("ghDetails").addEventListener("toggle", (e) => { ghOpen = e.target.open; });
     $("alExport").addEventListener("click", () => {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(buildExport(), null, 2)], { type: "application/json" }));

@@ -131,7 +131,7 @@ async function notify(title, message, side) {
   if (!topic) { console.log("(δεν έχει οριστεί θέμα ntfy — δεν στάλθηκε push)"); return; }
   const r = await fetch("https://ntfy.sh/", {
     method: "POST",
-    body: JSON.stringify({ topic, title, message, tags: [side === "sell" ? "chart_with_downwards_trend" : "chart_with_upwards_trend"] })
+    body: JSON.stringify({ topic, title, message, priority: 4, tags: [side === "sell" ? "chart_with_downwards_trend" : "chart_with_upwards_trend"] })
   });
   if (!r.ok) console.error("ntfy HTTP", r.status);
 }

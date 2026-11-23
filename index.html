@@ -7231,7 +7231,7 @@ loadData();
       try { new Notification(title, { body, tag: "ct-" + rule.id }); } catch (e) { /* π.χ. Android Chrome: μόνο μέσω service worker */ }
     }
     if (cfg.ntfy) {
-      fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: cfg.ntfy, title, message: body, tags: [side === "sell" ? "chart_with_downwards_trend" : side === "buy" ? "chart_with_upwards_trend" : "bell"] }) }).catch(() => {});
+      fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: cfg.ntfy, title, message: body, priority: 4, tags: [side === "sell" ? "chart_with_downwards_trend" : side === "buy" ? "chart_with_upwards_trend" : "bell"] }) }).catch(() => {});
     }
     if (document.getElementById("alertsModal").classList.contains("open")) render();
   }

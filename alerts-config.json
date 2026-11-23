@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-23T16:38:49.728Z",
+  "exported": "2026-11-23T16:43:30.721Z",
   "rules": [
     {
       "id": "r1",
@@ -207,45 +207,6 @@
       "name": "XRP",
       "sym": "XRP",
       "cur": "eur",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r17",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "below",
-      "value": 0.885,
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r18",
-      "on": true,
-      "type": "price",
-      "coin": "solana",
-      "dir": "below",
-      "value": 68,
-      "cur": "eur",
-      "name": "Solana",
-      "sym": "SOL",
-      "kraken": "SOLEUR",
-      "binance": "SOLUSDT"
-    },
-    {
-      "id": "r20",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "above",
-      "value": 0.94,
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     }

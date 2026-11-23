@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-23T16:45:46.928Z",
+  "exported": "2026-11-23T18:56:05.942Z",
   "rules": [
     {
       "id": "r1",
@@ -9,9 +9,9 @@
       "coin": "solana",
       "kind": "rsi_os",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -22,9 +22,9 @@
       "coin": "solana",
       "kind": "rsi_ob",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -35,9 +35,9 @@
       "coin": "solana",
       "kind": "macd_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -48,9 +48,9 @@
       "coin": "solana",
       "kind": "macd_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -61,9 +61,9 @@
       "coin": "solana",
       "kind": "bb_lo",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -74,9 +74,9 @@
       "coin": "solana",
       "kind": "bb_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -87,9 +87,9 @@
       "coin": "solana",
       "kind": "ema_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -100,9 +100,9 @@
       "coin": "solana",
       "kind": "ema_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -113,9 +113,9 @@
       "coin": "ripple",
       "kind": "rsi_os",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -126,9 +126,9 @@
       "coin": "ripple",
       "kind": "rsi_ob",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -139,9 +139,9 @@
       "coin": "ripple",
       "kind": "macd_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -152,9 +152,9 @@
       "coin": "ripple",
       "kind": "macd_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -165,9 +165,9 @@
       "coin": "ripple",
       "kind": "bb_lo",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -178,9 +178,9 @@
       "coin": "ripple",
       "kind": "bb_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -191,9 +191,9 @@
       "coin": "ripple",
       "kind": "ema_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -204,9 +204,9 @@
       "coin": "ripple",
       "kind": "ema_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "XRP",
       "sym": "XRP",
-      "cur": "eur",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
     },
@@ -235,6 +235,19 @@
       "sym": "SOL",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
+    },
+    {
+      "id": "r51",
+      "on": true,
+      "type": "price",
+      "coin": "ripple",
+      "dir": "below",
+      "value": 0.87,
+      "cur": "eur",
+      "name": "XRP",
+      "sym": "XRP",
+      "kraken": "XRPEUR",
+      "binance": "XRPUSDT"
     }
   ]
 }

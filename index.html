@@ -447,7 +447,8 @@
   <div class="dialog-box" style="max-width:640px; max-height:90vh; overflow-y:auto;">
     <div class="modal-head">
       <h2>🔔 Ειδοποιήσεις</h2>
-      <button class="icon-btn" id="closeAlertsBtn" style="font-size:1.4rem;">✕</button>
+      <span style="display:flex; gap:0.4rem; align-items:center;"><button class="icon-btn" id="alGearBtn" title="Ρυθμίσεις ειδοποιήσεων (τρόπος ειδοποίησης, ntfy, Telegram, GitHub)" style="font-size:1.35rem;">⚙</button>
+      <button id="closeAlertsBtn" title="Κλείσιμο" style="font-size:0.85rem; padding:0.25rem 0.6rem;">✕ Κλείσιμο</button></span>
     </div>
     <div id="alertsBody" style="display:flex; flex-direction:column; gap:0.8rem; font-size:0.88rem;"></div>
   </div>
@@ -7446,7 +7447,7 @@ loadData();
   let ghTimer = 0, ghSkipAuto = false;
   function ghAutoPush() { if (!ghSkipAuto && gh.auto && gh.repo && gh.token) { clearTimeout(ghTimer); ghTimer = setTimeout(() => ghPush(true), 2500); } }
 
-  let selCoin = null, grSelId = null, ghOpen = false;
+  let selCoin = null, grSelId = null, ghOpen = false, setOpen = false;
   const grpSummary = (g) => !g ? "" : g.rules.map(r => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0]} ${r.tf}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`).join(" · ");
   function grpApply(g, replace) {
     if (!g || !selCoin) return;
@@ -7494,15 +7495,15 @@ loadData();
           <div class="al-note">Η ομάδα κρατά τα τεχνικά σήματα (με χρονικό διάστημα) και τους κανόνες πτώσης/ανόδου %. Οι κανόνες συγκεκριμένης τιμής δεν περιλαμβάνονται, γιατί ισχύουν για ένα νόμισμα.</div>
         </div>`;
       coinSec = grp + `
-        <h3 style="margin-top:0.9rem;">Τεχνικά σήματα — ${esc(coinName(selCoin))}</h3>
-        <div class="al-row"><button id="alTechAll" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Επιλογή όλων</button><button id="alTechNone" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Καμία</button></div>
-        ${tech}
         <h3 style="margin-top:0.9rem;">Τιμή και κίνηση — ${esc(coinName(selCoin))}</h3>
         ${custom}
         <div class="al-add"><select id="alType"><option value="price_below">Τιμή κάτω από…</option><option value="price_above">Τιμή πάνω από…</option>
             <option value="drop">Πτώση 24ω ≥ …%</option><option value="rise">Άνοδος 24ω ≥ …%</option></select>
           <div class="al-valrow"><input type="number" id="alValue" step="any" placeholder="τιμή"><span id="alUnit" class="al-note"></span></div>
-          <button class="primary" id="alAdd">+ Προσθήκη</button></div>`;
+          <button class="primary" id="alAdd">+ Προσθήκη</button></div>
+        <h3 style="margin-top:0.9rem;">Τεχνικά σήματα — ${esc(coinName(selCoin))}</h3>
+        <div class="al-row"><button id="alTechAll" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Επιλογή όλων</button><button id="alTechNone" style="font-size:0.78rem; padding:0.2rem 0.5rem;">Καμία</button></div>
+        ${tech}`;
     }
     const shortTxt = (r) => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0].replace("Κλείσιμο ", "")} ${r.tf}` : r.type === "price" ? `τιμή ${r.dir === "below" ? "≤" : "≥"} ${cur(r.cur)}${num(r.value)}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`;
     const activeCoins = ids.filter(id => rulesOf(id).some(r => r.on));
@@ -7513,11 +7514,8 @@ loadData();
     $("alertsBody").innerHTML = `
       <div class="al-sec"><h3>Νομίσματα — διάλεξε για να δεις/ορίσεις τους κανόνες του</h3>
         <div class="al-row">${chips || '<span class="al-note">—</span>'}</div>
-        <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div></div>
-      <div class="al-sec"><h3>Τρέχουσες ειδοποιήσεις (ενεργοί κανόνες)</h3>${activeHtml}</div>
-      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
-      <div class="al-sec">${coinSec}</div>
-      <div class="al-sec"><h3>Συγχρονισμός κανόνων με το GitHub</h3>
+        <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div>
+      <div style="margin-top:0.6rem;"><div class="al-note" style="margin-bottom:0.3rem;">Αποθήκευση / συγχρονισμός / φόρτωση κανόνων (GitHub):</div>
         <div class="al-add">
           <button class="primary" id="ghPush">☁ Αποθήκευση κανόνων στο GitHub</button>
           <button id="ghPull">⬇ Φόρτωση κανόνων από το GitHub (αντικαθιστά τους τοπικούς)</button>
@@ -7525,11 +7523,16 @@ loadData();
         </div>
         <div id="ghStatus" class="al-note" style="margin-top:0.4rem;"></div>
       </div>
+      </div>
+      <div class="al-sec"><h3>Τρέχουσες ειδοποιήσεις (ενεργοί κανόνες)</h3>${activeHtml}</div>
+      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
+      <div class="al-sec">${coinSec}</div>
+      <div id="alSettings" style="display:${setOpen ? "flex" : "none"}; flex-direction:column; gap:0.8rem; border:1px dashed var(--border); border-radius:8px; padding:0.5rem;">
       <div class="al-sec"><h3>Τρόπος ειδοποίησης</h3>
         <label class="al-row"><input type="checkbox" id="alSound" ${cfg.sound ? "checked" : ""}> Ήχος</label>
         <label class="al-row"><input type="checkbox" id="alBrowser" ${cfg.browser && perm !== "denied" && perm !== "unsupported" ? "checked" : ""} ${perm === "unsupported" ? "disabled" : ""}> Ειδοποιήσεις browser
           <span class="al-note">${perm === "denied" ? "(αποκλεισμένες από τον browser)" : perm === "unsupported" ? "(δεν υποστηρίζονται εδώ)" : ""}</span></label>
-        <div class="al-row"><label class="al-note">Push στο κινητό μέσω ntfy.sh (προαιρετικό) — θέμα:</label>
+        <div class="al-row"><label class="al-note">Push μέσω ntfy.sh (προαιρετικό · άδειο θέμα = ανενεργό) — θέμα:</label>
           <input type="text" id="alNtfy" value="${esc(cfg.ntfy)}" placeholder="π.χ. nikos-crypto-8x2k" style="flex:1; min-width:10rem;">
           <button id="alNtfyTest">Δοκιμή</button></div>
         <div class="al-add" style="margin-top:0.6rem;">
@@ -7551,6 +7554,7 @@ loadData();
         </div>
         <div class="al-note">Το token αποθηκεύεται μόνο σε αυτόν τον browser και στέλνεται μόνο στο api.github.com. Φτιάξ' το από GitHub → Settings → Developer settings → Fine-grained tokens, με πρόσβαση μόνο σε αυτό το repo και δικαίωμα «Contents: Read and write».</div>
       </details>
+      </div>
       <div class="al-note">⚠ Οι ειδοποιήσεις ελέγχονται κάθε ~1 λεπτό <b>όσο η σελίδα είναι ανοιχτή</b> (και σε ανοιχτή καρτέλα στο παρασκήνιο στον υπολογιστή). Αν κλείσεις τη σελίδα ή το κινητό την παγώσει, δεν θα έρθει τίποτα. Δεν αποτελούν επενδυτική συμβουλή.</div>`;
     const body = $("alertsBody");
     body.querySelectorAll("[data-qdel]").forEach(b => b.addEventListener("click", () => { cfg.rules = cfg.rules.filter(r => r.id !== b.dataset.qdel); delete state[b.dataset.qdel]; save(); badge(); saveState(); render(); }));
@@ -7636,7 +7640,10 @@ loadData();
     $("ghPull").addEventListener("click", () => { ["ghRepo", "ghBranch", "ghPath", "ghToken"].forEach(id => $(id).dispatchEvent(new Event("change"))); ghPull(); });
     const tgSt = (m, ok) => { const el = $("tgStatus"); el.textContent = m; el.style.color = ok === true ? "#3ddc97" : ok === false ? "#ff5c6c" : ""; };
     const tgRead = () => { cfg.tgToken = $("tgToken").value.trim(); cfg.tgChat = $("tgChat").value.trim(); save(); };
-    $("tgToken").addEventListener("change", tgRead); $("tgChat").addEventListener("change", tgRead);
+    const tgChatOk = () => /^-?\d+$/.test(cfg.tgChat) || /^@\w+$/.test(cfg.tgChat);
+    const tgBadMsg = "Το Chat ID είναι αριθμός (π.χ. 123456789), όχι όνομα. Άδειασε το πεδίο και πάτα «Εύρεση» αφού στείλεις /start στο bot.";
+    $("tgToken").addEventListener("change", tgRead);
+    $("tgChat").addEventListener("change", () => { tgRead(); if (cfg.tgChat && !tgChatOk()) tgSt(tgBadMsg, false); });
     $("tgFind").addEventListener("click", async () => {
       tgRead();
       if (!cfg.tgToken) { tgSt("Βάλε πρώτα το token.", false); return; }
@@ -7651,6 +7658,7 @@ loadData();
     $("tgTest").addEventListener("click", async () => {
       tgRead();
       if (!cfg.tgToken || !cfg.tgChat) { tgSt("Συμπλήρωσε token και chat ID.", false); return; }
+      if (!tgChatOk()) { tgSt(tgBadMsg, false); return; }
       try { const j = await (await tgSend("🔔 Crypto Tracker: δοκιμαστικό μήνυμα ✔")).json(); tgSt(j.ok ? "✔ Στάλθηκε. Έλεγξε το Telegram." : "✖ " + (j.description || "Αποτυχία"), !!j.ok); }
       catch (e) { tgSt("✖ Αποτυχία σύνδεσης με το Telegram.", false); }
     });
@@ -7667,7 +7675,7 @@ loadData();
 
   $("alertsBtn").addEventListener("click", () => { unread = 0; badge(); render(); $("alertsModal").classList.add("open"); });
   $("closeAlertsBtn").addEventListener("click", () => $("alertsModal").classList.remove("open"));
-  $("alertsModal").addEventListener("click", (e) => { if (e.target === $("alertsModal")) $("alertsModal").classList.remove("open"); });
+  $("alGearBtn").addEventListener("click", () => { setOpen = !setOpen; render(); if (setOpen) $("alSettings").scrollIntoView({ block: "nearest" }); });
 
   badge();
   setInterval(evaluate, 60000);

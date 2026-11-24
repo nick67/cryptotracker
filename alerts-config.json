@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-24T05:12:06.794Z",
+  "exported": "2026-11-24T05:12:26.334Z",
   "rules": [
     {
       "id": "r1",
@@ -235,6 +235,19 @@
       "sym": "SOL",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
+    },
+    {
+      "id": "r52",
+      "on": true,
+      "type": "price",
+      "coin": "ripple",
+      "dir": "below",
+      "value": 0.869,
+      "cur": "eur",
+      "name": "XRP",
+      "sym": "XRP",
+      "kraken": "XRPEUR",
+      "binance": "XRPUSDT"
     }
   ]
 }

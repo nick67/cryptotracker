@@ -1,19 +1,5 @@
 {
   "ntfy": "",
-  "exported": "2026-11-24T14:59:17.437Z",
-  "rules": [
-    {
-      "id": "r24",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "below",
-      "value": 0.841,
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    }
-  ]
+  "exported": "2026-11-24T14:59:42.035Z",
+  "rules": []
 }

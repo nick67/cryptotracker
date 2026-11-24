@@ -7180,7 +7180,7 @@ loadData();
     ema_dn:  "Ο γρήγορος μέσος (EMA 20) περνά κάτω από τον αργό (EMA 50): ξεκινά πτωτική τάση (death cross, πιθανή πώληση)."
   };
   const TFS = ["15m", "1h", "4h", "1d"];
-  let cfg = { rules: [], groups: [], sound: true, browser: false, ntfy: "", nextId: 1 };
+  let cfg = { rules: [], groups: [], sound: true, browser: false, ntfy: "", tgToken: "", tgChat: "", nextId: 1 };
   let state = {}, hist = [];
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
   try { state = JSON.parse(localStorage.getItem(STKEY) || "{}"); } catch (e) {}
@@ -7222,6 +7222,12 @@ loadData();
     const b = $("alertsBadge"); if (b) b.textContent = unread ? String(unread) : "";
     const c = $("alertsCount"); if (c) { const n = cfg.rules.filter(r => r.on).length; c.textContent = n ? " (" + n + ")" : ""; }
   }
+  function tgSend(text) {
+    return fetch(`https://api.telegram.org/bot${encodeURIComponent(cfg.tgToken)}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: cfg.tgChat, text, disable_web_page_preview: true })
+    });
+  }
   function fire(rule, title, body, side) {
     const entry = { t: Date.now(), title, body, side };
     hist.unshift(entry); saveState();
@@ -7230,6 +7236,7 @@ loadData();
     if (cfg.browser && "Notification" in window && Notification.permission === "granted") {
       try { new Notification(title, { body, tag: "ct-" + rule.id }); } catch (e) { /* π.χ. Android Chrome: μόνο μέσω service worker */ }
     }
+    if (cfg.tgToken && cfg.tgChat) tgSend((side === "sell" ? "🔴 " : side === "buy" ? "🟢 " : "🔔 ") + title + "\n" + body).catch(() => {});
     if (cfg.ntfy) {
       fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify({ topic: cfg.ntfy, title, message: body, priority: 4, tags: [side === "sell" ? "chart_with_downwards_trend" : side === "buy" ? "chart_with_upwards_trend" : "bell"] }) }).catch(() => {});
     }
@@ -7525,6 +7532,12 @@ loadData();
         <div class="al-row"><label class="al-note">Push στο κινητό μέσω ntfy.sh (προαιρετικό) — θέμα:</label>
           <input type="text" id="alNtfy" value="${esc(cfg.ntfy)}" placeholder="π.χ. nikos-crypto-8x2k" style="flex:1; min-width:10rem;">
           <button id="alNtfyTest">Δοκιμή</button></div>
+        <div class="al-add" style="margin-top:0.6rem;">
+          <div class="al-note"><b>Telegram (προαιρετικό)</b> — μήνυμα σε προσωπική συνομιλία με bot. Ο token είναι κωδικός: αποθηκεύεται μόνο σε αυτόν τον browser και στέλνεται μόνο στο api.telegram.org.</div>
+          <input type="password" id="tgToken" value="${esc(cfg.tgToken)}" placeholder="Bot token (από το @BotFather)" autocomplete="off">
+          <div class="al-valrow"><input type="text" id="tgChat" value="${esc(cfg.tgChat)}" placeholder="Chat ID"><button id="tgFind" title="Βρίσκει το chat id από το τελευταίο μήνυμα που έστειλες στο bot">Εύρεση</button><button id="tgTest">Δοκιμή</button></div>
+          <div id="tgStatus" class="al-note"></div>
+        </div>
         <div class="al-note">Για push: εγκατέστησε την εφαρμογή ntfy στο κινητό και κάνε εγγραφή στο ίδιο θέμα. Το θέμα λειτουργεί σαν κωδικός — διάλεξε κάτι δύσκολο να το μαντέψει κάποιος. Το μήνυμα περνά από τον δημόσιο server ntfy.sh.</div>
       </div>
       <details class="al-sec" id="ghDetails" ${ghOpen ? "open" : ""}><summary style="cursor:pointer; font-weight:600;">⚙ Ρυθμίσεις GitHub (repo, token)${gh.repo && gh.token ? " ✔" : ""}</summary>
@@ -7621,6 +7634,26 @@ loadData();
     ghField("ghNoTopic", "noTopic", true); ghField("ghAuto", "auto", true);
     $("ghPush").addEventListener("click", () => { ["ghRepo", "ghBranch", "ghPath", "ghToken"].forEach(id => $(id).dispatchEvent(new Event("change"))); ghPush(false); });
     $("ghPull").addEventListener("click", () => { ["ghRepo", "ghBranch", "ghPath", "ghToken"].forEach(id => $(id).dispatchEvent(new Event("change"))); ghPull(); });
+    const tgSt = (m, ok) => { const el = $("tgStatus"); el.textContent = m; el.style.color = ok === true ? "#3ddc97" : ok === false ? "#ff5c6c" : ""; };
+    const tgRead = () => { cfg.tgToken = $("tgToken").value.trim(); cfg.tgChat = $("tgChat").value.trim(); save(); };
+    $("tgToken").addEventListener("change", tgRead); $("tgChat").addEventListener("change", tgRead);
+    $("tgFind").addEventListener("click", async () => {
+      tgRead();
+      if (!cfg.tgToken) { tgSt("Βάλε πρώτα το token.", false); return; }
+      try {
+        const j = await (await fetch(`https://api.telegram.org/bot${encodeURIComponent(cfg.tgToken)}/getUpdates`)).json();
+        if (!j.ok) throw new Error(j.description || "άκυρο token");
+        const m = [...j.result].reverse().map(u => (u.message || u.channel_post || u.my_chat_member || {}).chat).find(Boolean);
+        if (!m) { tgSt("Δεν βρέθηκε μήνυμα. Στείλε ένα μήνυμα (π.χ. /start) στο bot σου στο Telegram και ξαναπάτα «Εύρεση».", false); return; }
+        cfg.tgChat = String(m.id); save(); $("tgChat").value = cfg.tgChat; tgSt("✔ Βρέθηκε chat ID: " + cfg.tgChat, true);
+      } catch (e) { tgSt("✖ " + (e.message || "Αποτυχία σύνδεσης"), false); }
+    });
+    $("tgTest").addEventListener("click", async () => {
+      tgRead();
+      if (!cfg.tgToken || !cfg.tgChat) { tgSt("Συμπλήρωσε token και chat ID.", false); return; }
+      try { const j = await (await tgSend("🔔 Crypto Tracker: δοκιμαστικό μήνυμα ✔")).json(); tgSt(j.ok ? "✔ Στάλθηκε. Έλεγξε το Telegram." : "✖ " + (j.description || "Αποτυχία"), !!j.ok); }
+      catch (e) { tgSt("✖ Αποτυχία σύνδεσης με το Telegram.", false); }
+    });
     $("alNtfy").addEventListener("change", (e) => { cfg.ntfy = e.target.value.trim().replace(/[^\w-]/g, ""); save(); render(); });
     $("alNtfyTest").addEventListener("click", () => {
       const t = $("alNtfy").value.trim().replace(/[^\w-]/g, "");

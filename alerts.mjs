@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 const CONFIG = process.env.ALERTS_CONFIG || "alerts-config.json";
 const STATE = process.env.ALERTS_STATE || "state/alert-state.json";
 const NTFY_TOPIC = process.env.NTFY_TOPIC || ""; // προαιρετικά από GitHub Secret (υπερισχύει του αρχείου)
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "", TG_CHAT = process.env.TELEGRAM_CHAT_ID || ""; // προαιρετικά, από GitHub Secrets
 const TF_MIN = { "15m": 15, "1h": 60, "4h": 240, "1d": 1440 };
 const KRAKEN = "https://api.kraken.com/0/public";
 const BINANCE = "https://data-api.binance.vision/api/v3"; // δημόσια δεδομένα· το api.binance.com μπλοκάρει IP των ΗΠΑ
@@ -128,7 +129,16 @@ const cur = (r) => r.cur === "usd" ? "$" : "€";
 
 async function notify(title, message, side) {
   console.log("ΕΙΔΟΠΟΙΗΣΗ:", title, "—", message);
-  if (!topic) { console.log("(δεν έχει οριστεί θέμα ntfy — δεν στάλθηκε push)"); return; }
+  if (TG_TOKEN && TG_CHAT) {
+    try {
+      const tr = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: TG_CHAT, text: (side === "sell" ? "🔴 " : "🟢 ") + title + "\n" + message, disable_web_page_preview: true })
+      });
+      if (!tr.ok) console.error("Telegram HTTP", tr.status);
+    } catch (e) { console.error("Telegram:", e.message); }
+  }
+  if (!topic) { if (!(TG_TOKEN && TG_CHAT)) console.log("(δεν έχει οριστεί ούτε ntfy ούτε Telegram — δεν στάλθηκε push)"); return; }
   const r = await fetch("https://ntfy.sh/", {
     method: "POST",
     body: JSON.stringify({ topic, title, message, priority: 4, tags: [side === "sell" ? "chart_with_downwards_trend" : "chart_with_upwards_trend"] })

@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-25T12:07:03.194Z",
+  "exported": "2026-11-25T15:01:15.062Z",
   "rules": [
     {
       "id": "r25",
@@ -139,9 +139,9 @@
       "coin": "solana",
       "kind": "rsi_os",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -152,9 +152,9 @@
       "coin": "solana",
       "kind": "rsi_ob",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -165,9 +165,9 @@
       "coin": "solana",
       "kind": "macd_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -178,9 +178,9 @@
       "coin": "solana",
       "kind": "macd_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -191,9 +191,9 @@
       "coin": "solana",
       "kind": "bb_lo",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -204,9 +204,9 @@
       "coin": "solana",
       "kind": "bb_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -217,9 +217,9 @@
       "coin": "solana",
       "kind": "ema_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -230,9 +230,9 @@
       "coin": "solana",
       "kind": "ema_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -243,6 +243,19 @@
       "coin": "solana",
       "dir": "below",
       "value": 60,
+      "cur": "eur",
+      "name": "Solana",
+      "sym": "SOL",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r72",
+      "on": true,
+      "type": "price",
+      "coin": "solana",
+      "dir": "below",
+      "value": 55.3,
       "cur": "eur",
       "name": "Solana",
       "sym": "SOL",

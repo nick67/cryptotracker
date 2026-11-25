@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-25T12:06:06.924Z",
+  "exported": "2026-11-25T12:06:26.326Z",
   "rules": [
     {
       "id": "r25",
@@ -131,6 +131,110 @@
       "sym": "XRP",
       "kraken": "XRPEUR",
       "binance": "XRPUSDT"
+    },
+    {
+      "id": "r63",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "rsi_os",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r64",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "rsi_ob",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r65",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "macd_up",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r66",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "macd_dn",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r67",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "bb_lo",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r68",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "bb_up",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r69",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "ema_up",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r70",
+      "on": true,
+      "type": "tech",
+      "coin": "solana",
+      "kind": "ema_dn",
+      "tf": "1h",
+      "name": "Solana",
+      "sym": "SOL",
+      "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
     }
   ]
 }

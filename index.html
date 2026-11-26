@@ -195,6 +195,24 @@
     width: 100%; max-width: 520px; padding: 1.2rem; max-height: 90vh; overflow-y: auto;
   }
 
+  /* Παράθυρο ειδοποιήσεων: κινούμενο και με αλλαγή μεγέθους */
+  #alertsModal { background: transparent; pointer-events: none; padding: 0; display: none; }
+  #alertsModal.open { display: block; }
+  #alertsModal .al-win { pointer-events: auto; position: fixed; display: flex; flex-direction: column; width: 460px; height: 600px;
+    min-width: 300px; min-height: 220px; max-width: 98vw; max-height: 96vh; resize: both; overflow: hidden; padding: 0;
+    border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.65); }
+  .al-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border); background: var(--panel-2); cursor: move; user-select: none; flex-shrink: 0; touch-action: none; }
+  .al-head h2 { margin: 0; font-size: 1rem; }
+  #alertsBody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0.7rem 0.85rem; }
+  #alMenu { position: absolute; right: 0.5rem; top: 2.9rem; z-index: 6; width: min(430px, 94%); max-height: calc(100% - 3.4rem); overflow: auto;
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 0.6rem; box-shadow: 0 8px 28px rgba(0,0,0,0.7); }
+  #alMenu .al-sec { margin-bottom: 0.6rem; }
+  #zoomRect { display: none; position: absolute; pointer-events: none; z-index: 4; background: rgba(79,140,255,0.15); border: 1px dashed rgba(79,140,255,0.95); }
+  html.mobile #alertsModal .al-win { left: 2vw !important; top: 4vh !important; width: 96vw !important; height: 92vh !important; resize: none; }
+  html.mobile .al-head { cursor: default; }
+  html.mobile #zoomAreaBtn { display: none; }
+
   /* White crosshair cursor for the dark chart background */
   #bigChart {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='0' x2='10' y2='20' stroke='white' stroke-width='1.5'/%3E%3Cline x1='0' y1='10' x2='20' y2='10' stroke='white' stroke-width='1.5'/%3E%3Ccircle cx='10' cy='10' r='2' fill='none' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
@@ -442,14 +460,17 @@
   </div>
 </div>
 
-<!-- ALERTS MODAL -->
+<!-- ALERTS WINDOW (floating, resizable) -->
 <div class="dialog-overlay" id="alertsModal" style="z-index:450;">
-  <div class="dialog-box" style="max-width:640px; max-height:90vh; overflow-y:auto;">
-    <div class="modal-head">
-      <h2>🔔 Ειδοποιήσεις</h2>
-      <span style="display:flex; gap:0.4rem; align-items:center;"><button class="icon-btn" id="alGearBtn" title="Ρυθμίσεις ειδοποιήσεων (τρόπος ειδοποίησης, ntfy, Telegram, GitHub)" style="font-size:1.35rem;">⚙</button>
-      <button id="closeAlertsBtn" title="Κλείσιμο" style="font-size:0.85rem; padding:0.25rem 0.6rem;">✕ Κλείσιμο</button></span>
+  <div class="dialog-box al-win" id="alWin">
+    <div class="al-head" id="alHead" title="Σύρε για μετακίνηση">
+      <h2 id="alTitle">🔔 Ειδοποιήσεις</h2>
+      <span style="display:flex; gap:0.4rem; align-items:center;">
+        <button class="icon-btn" id="alGearBtn" title="Ρυθμίσεις ειδοποιήσεων (τρόπος ειδοποίησης, ntfy, Telegram, GitHub)" style="font-size:1.3rem;">⚙</button>
+        <button id="closeAlertsBtn" title="Κλείσιμο" style="font-size:0.85rem; padding:0.25rem 0.6rem;">✕ Κλείσιμο</button>
+      </span>
     </div>
+    <div id="alMenu" style="display:none;"></div>
     <div id="alertsBody" style="display:flex; flex-direction:column; gap:0.8rem; font-size:0.88rem;"></div>
   </div>
 </div>
@@ -703,6 +724,7 @@
         <option value="3">.3</option>
         <option value="4">.4</option>
       </select>
+      <button class="icon-btn" id="modalAlertBtn" title="Ειδοποιήσεις για αυτό το νόμισμα (ο αριθμός = ενεργοί κανόνες)" style="font-size:1.05rem; margin-left:0.4rem;">🔔</button>
       <button class="icon-btn" id="splitViewBtn" title="Διπλό παράθυρο σύγκρισης" style="font-size:1.1rem; margin-left:0.4rem;">⚏</button>
       <span id="modalOhlcTicker" style="font-size:0.85rem; color:var(--text-dim); margin-left:auto; margin-right:1rem; font-family:monospace;"></span>
       <button class="icon-btn" id="closeModalBtn" style="font-size:1.4rem;">✕</button>
@@ -749,6 +771,7 @@
       <button id="autoRefreshBtn" title="Αυτόματη ανανέωση" style="border-color:#22c55e;color:var(--text-dim);">⏱ Auto</button>
       <button id="bookmarkBtn" title="Flag στο διάγραμμα" style="border-color:#6b7280;color:#9aa1ac;">🔖 Flag</button>
       <button id="resetZoomBtn" title="Επαναφορά zoom (πλήρης προβολή του γραφήματος)" style="border-color:#6b7280;color:#9aa1ac;">🔍↺</button>
+      <button id="zoomAreaBtn" title="Zoom περιοχής: ενεργοποίησε και σύρε ένα ορθογώνιο πάνω στο γράφημα (Esc για έξοδο)" style="border-color:#6b7280;color:#9aa1ac;">🔍▭</button>
       <button id="snapshotBtn" style="border-color:#6b7280;color:#9aa1ac;">📸</button>
       <button id="orderBookBtn">📶 Βιβλίο</button>
       <button id="analyzeBtn">🤖 Ανάλυση</button>
@@ -798,6 +821,7 @@
 
     <div class="big-chart-wrap">
       <canvas id="bigChart"></canvas>
+      <div id="zoomRect"></div>
       <div id="selectionOverlay" style="
         display:none; position:absolute; top:0; bottom:0;
         background:rgba(79,140,255,0.12); border-left:1px dashed rgba(79,140,255,0.7);
@@ -4003,6 +4027,59 @@ document.getElementById("resetZoomBtn").addEventListener("click", () => {
   }
 });
 
+// ---- Zoom περιοχής με σύρσιμο ----
+let zoomArea = false, zoomDrag = null, zoomDoneAt = 0;
+function setZoomArea(on) {
+  zoomArea = !!on; zoomDrag = null;
+  const b = document.getElementById("zoomAreaBtn"); if (b) b.classList.toggle("active", zoomArea);
+  const r = document.getElementById("zoomRect"); if (r) r.style.display = "none";
+  bigChartCanvas.style.cursor = zoomArea ? "zoom-in" : "";
+  const h = document.getElementById("modalHint");
+  if (h && zoomArea) h.textContent = "Zoom περιοχής: σύρε ένα ορθογώνιο πάνω στο γράφημα (Esc για έξοδο).";
+  else if (h && h.textContent.startsWith("Zoom περιοχής")) h.textContent = "";
+}
+window.__zoomOff = () => { if (zoomArea) setZoomArea(false); };
+document.getElementById("zoomAreaBtn").addEventListener("click", () => {
+  if (!zoomArea && typeof activeTool !== "undefined" && activeTool !== null) setActiveTool(null);
+  setZoomArea(!zoomArea);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zoomArea) setZoomArea(false); });
+const zoomPos = (e) => Chart.helpers.getRelativePosition({ clientX: e.clientX, clientY: e.clientY, target: bigChartCanvas }, bigChart);
+bigChartCanvas.addEventListener("mousedown", (e) => {
+  if (!zoomArea || !bigChart || e.button !== 0 || e.ctrlKey || activeTool !== null) return;
+  const pos = zoomPos(e), ca = bigChart.chartArea;
+  if (pos.x < ca.left || pos.x > ca.right || pos.y < ca.top || pos.y > ca.bottom) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  zoomDrag = { x0: pos.x, y0: pos.y };
+}, true);
+bigChartCanvas.addEventListener("click", (e) => { if (performance.now() - zoomDoneAt < 80) e.stopImmediatePropagation(); }, true);
+window.addEventListener("mousemove", (e) => {
+  if (!zoomDrag || !bigChart) return;
+  const pos = zoomPos(e), ca = bigChart.chartArea;
+  const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  const x1 = cl(Math.min(zoomDrag.x0, pos.x), ca.left, ca.right), x2 = cl(Math.max(zoomDrag.x0, pos.x), ca.left, ca.right);
+  const y1 = cl(Math.min(zoomDrag.y0, pos.y), ca.top, ca.bottom), y2 = cl(Math.max(zoomDrag.y0, pos.y), ca.top, ca.bottom);
+  const r = document.getElementById("zoomRect");
+  r.style.display = "block"; r.style.left = x1 + "px"; r.style.top = y1 + "px"; r.style.width = (x2 - x1) + "px"; r.style.height = (y2 - y1) + "px";
+});
+window.addEventListener("mouseup", (e) => {
+  if (!zoomDrag || !bigChart) return;
+  const d = zoomDrag; zoomDrag = null;
+  document.getElementById("zoomRect").style.display = "none";
+  const pos = zoomPos(e), ca = bigChart.chartArea;
+  const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  const xA = cl(Math.min(d.x0, pos.x), ca.left, ca.right), xB = cl(Math.max(d.x0, pos.x), ca.left, ca.right);
+  const yA = cl(Math.min(d.y0, pos.y), ca.top, ca.bottom), yB = cl(Math.max(d.y0, pos.y), ca.top, ca.bottom);
+  zoomDoneAt = performance.now();
+  if (xB - xA < 8 || yB - yA < 8) return; // απλό κλικ: αγνοείται
+  const xs = bigChart.scales.x, ys = bigChart.scales.y;
+  const x0 = xs.getValueForPixel(xA), x1 = xs.getValueForPixel(xB);
+  const yTop = ys.getValueForPixel(yA), yBot = ys.getValueForPixel(yB);
+  bigChart.options.scales.x.min = x0; bigChart.options.scales.x.max = x1;
+  bigChart.options.scales.y.min = yBot; bigChart.options.scales.y.max = yTop;
+  bigChart.update("none");
+});
+
 // Prevent browser context menu / autoscroll icon on middle button press
 bigChartCanvas.addEventListener("auxclick", (evt) => { if (evt.button === 1) evt.preventDefault(); });
 
@@ -5344,6 +5421,7 @@ document.getElementById("dataRangeSelect").addEventListener("change", (e) => {
 });
 
 function setActiveTool(tool) {
+  if (tool !== null && window.__zoomOff) window.__zoomOff();
   activeTool = tool;
   trendlinePoints = [];
   channelOffset = null;
@@ -6293,6 +6371,8 @@ window.addEventListener("mouseup", (evt) => {
 function openChartModal(coinId, name, symbol) {
   currentModalCoinId = coinId;
   currentModalSymbol = symbol;
+  if (window.__zoomOff) window.__zoomOff();
+  if (window.__alerts && window.__alerts.onCoinChange) window.__alerts.onCoinChange(coinId);
 
   const krakenEurSymbol = KRAKEN_EUR_MAP[coinId];
   if (currency === "eur" && krakenEurSymbol) {
@@ -7219,7 +7299,14 @@ loadData();
     setTimeout(() => el.remove(), 20000);
   }
   let unread = 0;
+  function coinBadge() {
+    const cb = $("modalAlertBtn"); if (!cb) return;
+    const id = typeof currentModalCoinId !== "undefined" ? currentModalCoinId : null;
+    const n = id ? cfg.rules.filter(r => r.coin === id && r.on).length : 0;
+    cb.textContent = n ? "🔔 " + n : "🔔";
+  }
   function badge() {
+    coinBadge();
     const b = $("alertsBadge"); if (b) b.textContent = unread ? String(unread) : "";
     const c = $("alertsCount"); if (c) { const n = cfg.rules.filter(r => r.on).length; c.textContent = n ? " (" + n + ")" : ""; }
   }
@@ -7447,7 +7534,7 @@ loadData();
   let ghTimer = 0, ghSkipAuto = false;
   function ghAutoPush() { if (!ghSkipAuto && gh.auto && gh.repo && gh.token) { clearTimeout(ghTimer); ghTimer = setTimeout(() => ghPush(true), 2500); } }
 
-  let selCoin = null, grSelId = null, ghOpen = false, setOpen = false;
+  let selCoin = null, grSelId = null, ghOpen = false, setOpen = false, winCoin = null;
   const grpSummary = (g) => !g ? "" : g.rules.map(r => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0]} ${r.tf}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`).join(" · ");
   function grpApply(g, replace) {
     if (!g || !selCoin) return;
@@ -7464,6 +7551,7 @@ loadData();
   function render() {
     const ids = [...new Set([...(watchlist || []), ...cfg.rules.map(r => r.coin)])];
     if (!selCoin || !ids.includes(selCoin)) selCoin = ids[0] || null;
+    if (winCoin) selCoin = winCoin;
     const perm = "Notification" in window ? Notification.permission : "unsupported";
     const chips = ids.map(id => {
       const n = rulesOf(id).filter(r => r.on).length;
@@ -7506,15 +7594,12 @@ loadData();
         ${tech}`;
     }
     const shortTxt = (r) => r.type === "tech" ? `${TECH[r.kind].label.split(" (")[0].replace("Κλείσιμο ", "")} ${r.tf}` : r.type === "price" ? `τιμή ${r.dir === "below" ? "≤" : "≥"} ${cur(r.cur)}${num(r.value)}` : `${r.type === "drop" ? "πτώση" : "άνοδος"} ≥${r.value}%`;
-    const activeCoins = ids.filter(id => rulesOf(id).some(r => r.on));
+    const activeCoins = (winCoin ? [winCoin] : ids).filter(id => rulesOf(id).some(r => r.on));
     const activeHtml = activeCoins.length ? activeCoins.map(id => `<div class="al-row" style="align-items:flex-start;">
         <button class="al-chip ${id === selCoin ? "sel" : ""}" data-coin="${id}" title="Άνοιγμα κανόνων ${esc(coinName(id))}">${esc(coinSym(id))}</button>
         <div style="flex:1; display:flex; flex-wrap:wrap; gap:0.3rem;">${rulesOf(id).filter(r => r.on).map(r => `<span class="al-tag ${r.type === "tech" ? (TECH[r.kind].side === "buy" ? "buy" : "sell") : ""}" title="${esc(ruleText(r))}">${esc(shortTxt(r))} <button class="icon-btn" data-qdel="${r.id}" title="Διαγραφή" style="font-size:0.9rem; padding:0 0.15rem;">✕</button></span>`).join("")}</div></div>`).join("")
       : `<div class="al-note">Δεν υπάρχουν ενεργοί κανόνες.</div>`;
-    $("alertsBody").innerHTML = `
-      <div class="al-sec"><h3>Νομίσματα — διάλεξε για να δεις/ορίσεις τους κανόνες του</h3>
-        <div class="al-row">${chips || '<span class="al-note">—</span>'}</div>
-        <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div>
+    const syncHtml = `
       <div style="margin-top:0.6rem;"><div class="al-note" style="margin-bottom:0.3rem;">Αποθήκευση / συγχρονισμός / φόρτωση κανόνων (GitHub):</div>
         <div class="al-add">
           <button class="primary" id="ghPush">☁ Αποθήκευση κανόνων στο GitHub</button>
@@ -7523,11 +7608,8 @@ loadData();
         </div>
         <div id="ghStatus" class="al-note" style="margin-top:0.4rem;"></div>
       </div>
-      </div>
-      <div class="al-sec"><h3>Τρέχουσες ειδοποιήσεις (ενεργοί κανόνες)</h3>${activeHtml}</div>
-      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>
-      <div class="al-sec">${coinSec}</div>
-      <div id="alSettings" style="display:${setOpen ? "flex" : "none"}; flex-direction:column; gap:0.8rem; border:1px dashed var(--border); border-radius:8px; padding:0.5rem;">
+    `;
+    const settingsHtml = `
       <div class="al-sec"><h3>Τρόπος ειδοποίησης</h3>
         <label class="al-row"><input type="checkbox" id="alSound" ${cfg.sound ? "checked" : ""}> Ήχος</label>
         <label class="al-row"><input type="checkbox" id="alBrowser" ${cfg.browser && perm !== "denied" && perm !== "unsupported" ? "checked" : ""} ${perm === "unsupported" ? "disabled" : ""}> Ειδοποιήσεις browser
@@ -7554,8 +7636,31 @@ loadData();
         </div>
         <div class="al-note">Το token αποθηκεύεται μόνο σε αυτόν τον browser και στέλνεται μόνο στο api.github.com. Φτιάξ' το από GitHub → Settings → Developer settings → Fine-grained tokens, με πρόσβαση μόνο σε αυτό το repo και δικαίωμα «Contents: Read and write».</div>
       </details>
-      </div>
+    `;
+    const noteHtml = `
       <div class="al-note">⚠ Οι ειδοποιήσεις ελέγχονται κάθε ~1 λεπτό <b>όσο η σελίδα είναι ανοιχτή</b> (και σε ανοιχτή καρτέλα στο παρασκήνιο στον υπολογιστή). Αν κλείσεις τη σελίδα ή το κινητό την παγώσει, δεν θα έρθει τίποτα. Δεν αποτελούν επενδυτική συμβουλή.</div>`;
+    const headHtml = `
+      <div class="al-sec"><h3>Νομίσματα — διάλεξε για να δεις/ορίσεις τους κανόνες του</h3>
+        <div class="al-row">${chips || '<span class="al-note">—</span>'}</div>
+        <div class="al-note">Ο αριθμός δίπλα στο σύμβολο είναι το πλήθος των ενεργών κανόνων.</div>
+${syncHtml}
+      </div>`;
+    const topCoinHtml = `<div class="al-sec"><h3>${selCoin ? esc(coinName(selCoin)) : ""}</h3>
+        <div class="al-note">Ρυθμίσεις ειδοποιήσεων μόνο για αυτό το νόμισμα. Οι συνολικές εμφανίζονται στην αρχική οθόνη (κουμπί 🔔 πάνω).</div>
+        ${syncHtml}</div>`;
+    const activeSec = `
+      <div class="al-sec"><h3>Τρέχουσες ειδοποιήσεις (ενεργοί κανόνες)</h3>${activeHtml}</div>`;
+    const histSec = `
+      <div class="al-sec"><h3>Ιστορικό</h3><div class="al-hist">${hist.map(h => `<div><span class="al-note">${new Date(h.t).toLocaleString("el-GR")}</span><br><b style="color:${h.side === "buy" ? "#3ddc97" : h.side === "sell" ? "#ff5c6c" : "inherit"}">${esc(h.title)}</b> ${esc(h.body)}</div>`).join("") || '<span class="al-note">—</span>'}</div></div>`;
+    const coinSecEl = `
+      <div class="al-sec">${coinSec}</div>`;
+    $("alTitle").textContent = winCoin ? "🔔 " + coinName(winCoin) : "🔔 Ειδοποιήσεις";
+    $("alertsBody").innerHTML = winCoin
+      ? topCoinHtml + activeSec + coinSecEl + noteHtml
+      : headHtml + activeSec + coinSecEl + histSec + noteHtml;
+    $("alMenu").innerHTML = settingsHtml;
+    $("alMenu").style.display = setOpen ? "block" : "none";
+    if ($("modalAlertBtn")) coinBadge();
     const body = $("alertsBody");
     body.querySelectorAll("[data-qdel]").forEach(b => b.addEventListener("click", () => { cfg.rules = cfg.rules.filter(r => r.id !== b.dataset.qdel); delete state[b.dataset.qdel]; save(); badge(); saveState(); render(); }));
     body.querySelectorAll("[data-coin]").forEach(b => b.addEventListener("click", () => { selCoin = b.dataset.coin; render(); }));
@@ -7671,11 +7776,56 @@ loadData();
         .then(r => toast(r.ok ? "Στάλθηκε δοκιμαστικό μήνυμα" : "Αποτυχία αποστολής", r.ok ? "Έλεγξε την εφαρμογή ntfy." : "HTTP " + r.status)).catch(() => toast("Αποτυχία αποστολής", "Δεν ήταν δυνατή η σύνδεση με το ntfy.sh."));
     });
   }
-  window.__alerts = { evaluate, cfg, fire, render, techCheck };
+  window.__alerts = { evaluate, cfg, fire, render, techCheck,
+    onCoinChange: (id) => { coinBadge(); if (winCoin && $("alertsModal").classList.contains("open")) { winCoin = id; selCoin = id; render(); } } };
 
-  $("alertsBtn").addEventListener("click", () => { unread = 0; badge(); render(); $("alertsModal").classList.add("open"); });
+  const WIN_KEY = "crypto_tracker_alertswin_v1";
+  const saveWin = () => { const w = $("alWin"); if (!w || !$("alertsModal").classList.contains("open") || window.IS_MOBILE) return;
+    try { localStorage.setItem(WIN_KEY, JSON.stringify({ w: w.offsetWidth, h: w.offsetHeight, l: w.offsetLeft, t: w.offsetTop })); } catch (e) {} };
+  function openWin() {
+    const m = $("alertsModal"), w = $("alWin");
+    const host = document.fullscreenElement || document.body;
+    if (m.parentElement !== host) host.appendChild(m);
+    unread = 0; badge(); render();
+    if (!m.classList.contains("open")) {
+      m.classList.add("open");
+      if (!window.IS_MOBILE) {
+        let sv = null; try { sv = JSON.parse(localStorage.getItem(WIN_KEY) || "null"); } catch (e) {}
+        if (sv && sv.w && sv.h) { w.style.width = sv.w + "px"; w.style.height = sv.h + "px"; }
+        const ww = w.offsetWidth, wh = w.offsetHeight;
+        const l = sv && sv.l != null ? sv.l : window.innerWidth - ww - 24, t = sv && sv.t != null ? sv.t : 70;
+        w.style.left = Math.max(0, Math.min(window.innerWidth - Math.min(ww, 120), l)) + "px";
+        w.style.top = Math.max(0, Math.min(window.innerHeight - 50, t)) + "px";
+      }
+    }
+  }
+  $("alertsBtn").addEventListener("click", () => { winCoin = null; openWin(); });
+  $("modalAlertBtn").addEventListener("click", () => {
+    if (typeof currentModalCoinId === "undefined" || !currentModalCoinId) return;
+    winCoin = currentModalCoinId; selCoin = winCoin; openWin();
+  });
+  (function winDrag() {
+    const head = $("alHead"); let d = null;
+    head.addEventListener("pointerdown", (e) => {
+      if (window.IS_MOBILE || e.target.closest("button")) return;
+      const w = $("alWin"); d = { x: e.clientX - w.offsetLeft, y: e.clientY - w.offsetTop };
+      try { head.setPointerCapture(e.pointerId); } catch (er) {}
+      e.preventDefault();
+    });
+    head.addEventListener("pointermove", (e) => {
+      if (!d) return; const w = $("alWin");
+      w.style.left = Math.max(0, Math.min(window.innerWidth - 80, e.clientX - d.x)) + "px";
+      w.style.top = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - d.y)) + "px";
+    });
+    const end = () => { if (d) { d = null; saveWin(); } };
+    head.addEventListener("pointerup", end); head.addEventListener("pointercancel", end);
+    if (window.ResizeObserver) { let tm = 0; new ResizeObserver(() => { clearTimeout(tm); tm = setTimeout(saveWin, 300); }).observe($("alWin")); }
+  })();
   $("closeAlertsBtn").addEventListener("click", () => $("alertsModal").classList.remove("open"));
-  $("alGearBtn").addEventListener("click", () => { setOpen = !setOpen; render(); if (setOpen) $("alSettings").scrollIntoView({ block: "nearest" }); });
+  $("alGearBtn").addEventListener("click", () => { setOpen = !setOpen; $("alMenu").style.display = setOpen ? "block" : "none"; });
+  document.addEventListener("mousedown", (e) => {
+    if (setOpen && !e.target.closest("#alMenu") && !e.target.closest("#alGearBtn")) { setOpen = false; $("alMenu").style.display = "none"; }
+  });
 
   badge();
   setInterval(evaluate, 60000);

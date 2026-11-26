@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-26T05:33:51.911Z",
+  "exported": "2026-11-26T05:33:57.844Z",
   "rules": [
     {
       "id": "r25",
@@ -100,32 +100,6 @@
       "coin": "ripple",
       "kind": "ema_dn",
       "tf": "1h",
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r61",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "below",
-      "value": 0.781,
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
-      "id": "r62",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "below",
-      "value": 0.8,
       "cur": "eur",
       "name": "XRP",
       "sym": "XRP",

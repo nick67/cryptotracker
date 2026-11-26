@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-26T05:32:58.580Z",
+  "exported": "2026-11-26T05:33:07.887Z",
   "rules": [
     {
       "id": "r25",
@@ -47,7 +47,7 @@
       "type": "tech",
       "coin": "ripple",
       "kind": "macd_dn",
-      "tf": "1h",
+      "tf": "1d",
       "cur": "eur",
       "name": "XRP",
       "sym": "XRP",

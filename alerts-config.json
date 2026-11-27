@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-27T15:06:15.080Z",
+  "exported": "2026-11-27T15:06:53.467Z",
   "rules": [
     {
       "id": "r25",
@@ -259,6 +259,19 @@
       "name": "Solana",
       "sym": "SOL",
       "cur": "eur",
+      "kraken": "SOLEUR",
+      "binance": "SOLUSDT"
+    },
+    {
+      "id": "r89",
+      "on": true,
+      "type": "price",
+      "coin": "solana",
+      "dir": "below",
+      "value": 62.2,
+      "cur": "eur",
+      "name": "Solana",
+      "sym": "SOL",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     }

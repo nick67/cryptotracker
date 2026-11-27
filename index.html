@@ -87,7 +87,8 @@
   .coin-name { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 1rem; }
   .coin-name img { width: 22px; height: 22px; border-radius: 50%; }
   .ticker { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; }
-  .head-actions { display: flex; gap: 0.3rem; align-items: center; }
+  .head-actions { display: flex; gap: 0.3rem; align-items: center; flex-shrink: 0; margin-left: 0.9rem; padding-left: 0.5rem; border-left: 1px solid var(--border); }
+  .name-actions { display: inline-flex; gap: 0.3rem; align-items: center; flex-shrink: 0; margin-left: 0.2rem; }
   .icon-btn {
     background: transparent; border: none; color: var(--text-dim);
     font-size: 1.1rem; padding: 0 0.2rem; line-height: 1;
@@ -2151,8 +2152,7 @@ function renderCards(coins) {
           <img src="${coin.image}" alt="${coin.name}">
           <span>${coin.name}</span>
           <span class="ticker">${coin.symbol}</span>
-        </div>
-        <div class="head-actions">
+          <span class="name-actions">
           <select class="decimals-select" data-coin="${coin.id}" title="Δεκαδικά ψηφία για ${coin.name}" style="background:var(--panel-2); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; font-size:0.7rem; padding:0.1rem 0.2rem; cursor:pointer;">
             <option value="1">.1</option>
             <option value="2">.2</option>
@@ -2160,6 +2160,9 @@ function renderCards(coins) {
             <option value="4">.4</option>
           </select>
           <button class="icon-btn expand" title="Μεγέθυνση διαγράμματος" data-id="${coin.id}" data-name="${coin.name}">⛶</button>
+          </span>
+        </div>
+        <div class="head-actions">
           <button class="icon-btn remove" title="Αφαίρεση" data-id="${coin.id}">✕</button>
         </div>
       </div>
@@ -7248,7 +7251,9 @@ loadData();
     bb_lo:    { label: "Κλείσιμο κάτω από Bollinger", side: "buy" },
     bb_up:    { label: "Κλείσιμο πάνω από Bollinger", side: "sell" },
     ema_up:   { label: "EMA 20 πάνω από EMA 50 (golden cross)", side: "buy" },
-    ema_dn:   { label: "EMA 20 κάτω από EMA 50 (death cross)", side: "sell" }
+    ema_dn:   { label: "EMA 20 κάτω από EMA 50 (death cross)", side: "sell" },
+    piv_up:   { label: "Διάσπαση pivot προς τα πάνω (κλείσιμο πάνω από γραμμή)", side: "buy" },
+    piv_dn:   { label: "Διάσπαση pivot προς τα κάτω (κλείσιμο κάτω από γραμμή)", side: "sell" }
   };
   const TECH_INFO = {
     rsi_os:  "Ο RSI έπεσε κάτω από 30: η τιμή έχει πέσει πολύ γρήγορα και μπορεί να ανακάμψει (πιθανή αγορά).",
@@ -7258,7 +7263,9 @@ loadData();
     bb_lo:   "Κερί που κλείνει κάτω από την κάτω μπάντα Bollinger: ασυνήθιστα χαμηλή τιμή, συχνά ακολουθεί επιστροφή προς τον μέσο (πιθανή αγορά).",
     bb_up:   "Κερί που κλείνει πάνω από την πάνω μπάντα Bollinger: ασυνήθιστα υψηλή τιμή, συχνά ακολουθεί επιστροφή προς τον μέσο (πιθανή πώληση).",
     ema_up:  "Ο γρήγορος μέσος (EMA 20) περνά πάνω από τον αργό (EMA 50): ξεκινά ανοδική τάση (golden cross, πιθανή αγορά).",
-    ema_dn:  "Ο γρήγορος μέσος (EMA 20) περνά κάτω από τον αργό (EMA 50): ξεκινά πτωτική τάση (death cross, πιθανή πώληση)."
+    ema_dn:  "Ο γρήγορος μέσος (EMA 20) περνά κάτω από τον αργό (EMA 50): ξεκινά πτωτική τάση (death cross, πιθανή πώληση).",
+    piv_up:  "Το κερί κλείνει πάνω από μια γραμμή pivot (PP, R1, R2, R3) που μόλις είχε από κάτω: η τιμή ξεπερνά αντίσταση και η ορμή γίνεται ανοδική (πιθανή αγορά).",
+    piv_dn:  "Το κερί κλείνει κάτω από μια γραμμή pivot (PP, S1, S2, S3) που μόλις είχε από πάνω: η τιμή χάνει στήριξη και η ορμή γίνεται πτωτική (πιθανή πώληση)."
   };
   const TFS = ["15m", "1h", "4h", "1d"];
   let cfg = { rules: [], groups: [], sound: true, browser: false, ntfy: "", tgToken: "", tgChat: "", nextId: 1 };
@@ -7357,7 +7364,19 @@ loadData();
   }
 
   /* ---------- αξιολόγηση ---------- */
-  function techCheck(kind, candles) {
+  function pivotLevels(cs, tf) {
+    // κλασικά pivot: από H/L/C της προηγούμενης περιόδου (ενδοημερήσια → ημερήσια, 1d → εβδομαδιαία), όπως στο γράφημα
+    const key = (ts) => tf === "1d" ? Math.floor((Math.floor(ts / 86400000) + 3) / 7) : Math.floor(ts / 86400000);
+    const n = cs.length; let i = n - 1; const k = key(cs[i][0]);
+    while (i >= 0 && key(cs[i][0]) === k) i--;
+    if (i < 0) return null;
+    const pk = key(cs[i][0]), c = cs[i][4]; let h = -Infinity, l = Infinity;
+    while (i >= 0 && key(cs[i][0]) === pk) { h = Math.max(h, cs[i][2]); l = Math.min(l, cs[i][3]); i--; }
+    if (i < 0) return null; // η προηγούμενη περίοδος μπορεί να είναι ελλιπής
+    const pp = (h + l + c) / 3, r = h - l;
+    return { R3: h + 2 * (pp - l), R2: pp + r, R1: 2 * pp - l, PP: pp, S1: 2 * pp - h, S2: pp - r, S3: l - 2 * (h - pp) };
+  }
+  function techCheck(kind, candles, tf) {
     // μόνο ΚΛΕΙΣΤΑ κεριά (το τελευταίο σχηματίζεται ακόμη)
     const cs = candles.slice(0, -1);
     const n = cs.length;
@@ -7387,6 +7406,18 @@ loadData();
       if (!isFinite(a) || !isFinite(b)) return null;
       if (kind === "ema_up" && a <= 0 && b > 0) return hit("ο EMA 20 διέσχισε προς τα πάνω τον EMA 50");
       if (kind === "ema_dn" && a >= 0 && b < 0) return hit("ο EMA 20 διέσχισε προς τα κάτω τον EMA 50");
+    } else if (kind === "piv_up" || kind === "piv_dn") {
+      const lv = pivotLevels(cs, tf);
+      if (!lv) return null;
+      const a = closes[n - 2], b = closes[n - 1];
+      const ents = Object.entries(lv).sort((x, y) => x[1] - y[1]);
+      if (kind === "piv_up") {
+        const up = ents.filter(([, v]) => a <= v && b > v);
+        if (up.length) { const [nm, v] = up[up.length - 1]; return hit(`κλείσιμο πάνω από τη γραμμή pivot ${nm} (${num(v)})`); }
+      } else {
+        const dn = ents.filter(([, v]) => a >= v && b < v);
+        if (dn.length) { const [nm, v] = dn[0]; return hit(`κλείσιμο κάτω από τη γραμμή pivot ${nm} (${num(v)})`); }
+      }
     }
     return null;
   }
@@ -7429,7 +7460,7 @@ loadData();
             } else if (!hitNow && st.armed === false && Math.abs(ch) < r.value * 0.6) st.armed = true;
           } else if (r.type === "tech") {
             const cs = await getCandles(r.coin, r.tf);
-            const res = techCheck(r.kind, cs);
+            const res = techCheck(r.kind, cs, r.tf);
             if (res && st.last !== res.at) {
               st.last = res.at;
               const T = TECH[r.kind];

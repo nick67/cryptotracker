@@ -1,6 +1,6 @@
 {
   "ntfy": "",
-  "exported": "2026-11-27T18:10:59.106Z",
+  "exported": "2026-11-28T05:58:10.620Z",
   "rules": [
     {
       "id": "r25",
@@ -224,19 +224,6 @@
       "binance": "SOLUSDT"
     },
     {
-      "id": "r91",
-      "on": true,
-      "type": "price",
-      "coin": "ripple",
-      "dir": "below",
-      "value": 0.82,
-      "cur": "eur",
-      "name": "XRP",
-      "sym": "XRP",
-      "kraken": "XRPEUR",
-      "binance": "XRPUSDT"
-    },
-    {
       "id": "r92",
       "on": true,
       "type": "tech",
@@ -282,9 +269,9 @@
       "coin": "solana",
       "kind": "macd_up",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     },
@@ -295,9 +282,9 @@
       "coin": "solana",
       "kind": "macd_dn",
       "tf": "1h",
+      "cur": "eur",
       "name": "Solana",
       "sym": "SOL",
-      "cur": "eur",
       "kraken": "SOLEUR",
       "binance": "SOLUSDT"
     }
